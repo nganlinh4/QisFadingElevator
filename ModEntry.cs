@@ -5,10 +5,17 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Locations;
-using StardewValley.Monsters;
 
 namespace QisFadingElevator
 {
+    /// <summary>The source of a foothold-damaging hit.</summary>
+    internal enum DamageSource
+    {
+        Monster,
+        Blast,
+        Other
+    }
+
     /// <summary>The mod entry point.</summary>
     public class ModEntry : Mod
     {
@@ -29,30 +36,26 @@ namespace QisFadingElevator
         private const string BatteryPackItemId = "(O)787";
         private const int RepairIridiumBars = 5;
         private const int RepairBatteryPacks = 1;
-        private const int RepairAnimationTotalTicks = 132;
 
-        private static ModEntry? Instance;
-
-        private ModConfig Config = null!;
-        private FootholdManager Manager = null!;
-        private FootholdSaveData Data = new();
-        private DepthGauge Gauge = null!;
+        private FootholdSaveData data = new();
+        private DamageWatcher damageWatcher = null!;
         private Texture2D Sprites = null!;
         private readonly StoryToast StoryNotice = new();
 
         /// <summary>Deepest new record reached since entering the cavern; announced on surfacing.</summary>
         private int pendingRecordFloor;
 
-        /// <summary>Last locally observed health value, used to identify one health-loss event per hit.</summary>
-        private int lastObservedHealth = -1;
-
-        /// <summary>Whether the previous health observation happened on a Skull Cavern floor.</summary>
-        private bool lastObservedInCavern;
-
         /// <summary>Transient awakening sequence; repaired state is persisted before this begins.</summary>
         private int repairAnimationTicksRemaining;
-        private int lastRepairCue = -1;
         private int lastRecordToastVariant = -1;
+
+        /*********
+        ** Internal state shared with ConfigMenu/ConsoleCommands/DamageWatcher
+        *********/
+        internal ModConfig Config { get; private set; } = null!;
+        internal FootholdManager Manager { get; private set; } = null!;
+        internal DepthGauge Gauge { get; private set; } = null!;
+        internal FootholdSaveData Data => this.data;
 
         /*********
         ** Public methods
@@ -60,13 +63,13 @@ namespace QisFadingElevator
         /// <summary>The mod entry point, called after the mod is first loaded.</summary>
         public override void Entry(IModHelper helper)
         {
-            Instance = this;
             this.Config = helper.ReadConfig<ModConfig>();
             this.Manager = new FootholdManager(this.Config);
             this.Sprites = helper.ModContent.Load<Texture2D>("assets/qfe-sprites.png");
             this.Gauge = new DepthGauge(this.Sprites);
+            this.damageWatcher = new DamageWatcher(this);
 
-            helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
+            helper.Events.GameLoop.GameLaunched += (_, _) => ConfigMenu.Register(this);
             helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
             helper.Events.GameLoop.Saving += this.OnSaving;
             helper.Events.GameLoop.DayEnding += this.OnDayEnding;
@@ -77,119 +80,52 @@ namespace QisFadingElevator
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
             helper.Events.Display.RenderedHud += this.OnRenderedHud;
 
-            helper.ConsoleCommands.Add("qfe_foothold", "Set your Skull Cavern foothold (and record) to a floor, for testing. Usage: qfe_foothold <floor>", this.CmdSetFoothold);
-            helper.ConsoleCommands.Add("qfe_status", "Show your current foothold, record, repair state, and fade clock.", this.CmdStatus);
-            helper.ConsoleCommands.Add("qfe_decay", "Apply hourly fading immediately for testing. Usage: qfe_decay [hours]", this.CmdDecay);
-            helper.ConsoleCommands.Add("qfe_damage", "Test a hit. Usage: qfe_damage [health lost] [monster|blast|other]", this.CmdDamage);
-            helper.ConsoleCommands.Add("qfe_repair", "Set the shaft repair state for testing. Usage: qfe_repair <on|off>", this.CmdRepair);
-
-            var harmony = new Harmony(this.ModManifest.UniqueID);
-            harmony.Patch(
-                AccessTools.Method(
-                    typeof(Farmer),
-                    nameof(Farmer.takeDamage),
-                    new[] { typeof(int), typeof(bool), typeof(StardewValley.Monsters.Monster) }),
-                prefix: new HarmonyMethod(typeof(ModEntry), nameof(BeforeFarmerTakeDamage)),
-                postfix: new HarmonyMethod(typeof(ModEntry), nameof(AfterFarmerTakeDamage)));
+            new ConsoleCommands(this).Register(helper);
+            this.damageWatcher.RegisterPatches(new Harmony(this.ModManifest.UniqueID));
 
             this.Monitor.Log("Qi's Fading Elevator loaded. The shaft remembers... for now.", LogLevel.Info);
         }
 
-        /// <summary>Capture the pre-call state so the postfix can distinguish a real hit from a parry/prevention.</summary>
-        private static void BeforeFarmerTakeDamage(Farmer __instance, int damage, bool overrideParry, Monster? damager, out DamagePatchState __state)
-        {
-            DamageSource source = damager is not null
-                ? DamageSource.Monster
-                : overrideParry ? DamageSource.Blast : DamageSource.Other;
-            __state = new DamagePatchState(__instance.health, __instance.temporarilyInvincible, Math.Max(1, damage), source);
-        }
-
-        /// <summary>Charge one floor after the game's own damage method confirms a successful local hit.</summary>
-        private static void AfterFarmerTakeDamage(Farmer __instance, DamagePatchState __state)
-        {
-            ModEntry? mod = Instance;
-            if (mod is null
-                || !mod.Config.Enabled
-                || !mod.Data.IsRepaired
-                || !Context.IsWorldReady
-                || !ReferenceEquals(__instance, Game1.player)
-                || !ElevatorPrototype.IsSkullCavernFloor(__instance.currentLocation))
-            {
-                return;
-            }
-
-            bool registeredHit = __instance.health != __state.Health
-                || (!__state.WasInvincible && __instance.temporarilyInvincible);
-            if (!registeredHit)
-                return;
-
-            int healthLost = Math.Max(0, __state.Health - __instance.health);
-            int severity = healthLost > 0 ? healthLost : __state.IncomingDamage;
-            mod.ApplyDamagePenalty(DamageFloorsFor(severity, __state.Source));
-            mod.lastObservedHealth = __instance.health;
-            mod.lastObservedInCavern = true;
-        }
-
         /*********
-        ** Private methods
+        ** Config plumbing (called by ConfigMenu)
         *********/
-        /// <summary>Register the in-game config menu if GMCM is installed.</summary>
-        private void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
-        {
-            var gmcm = this.Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
-            if (gmcm is null)
-                return;
-
-            gmcm.Register(this.ModManifest, this.ResetConfig, this.SaveConfig);
-
-            gmcm.AddBoolOption(this.ModManifest, () => this.Config.Enabled, v => this.Config.Enabled = v, () => "Wake the old shaft");
-            gmcm.AddBoolOption(this.ModManifest, () => this.Config.ShowDepthGauge, v => this.Config.ShowDepthGauge = v, () => "Show the shaft's memory");
-            gmcm.AddBoolOption(this.ModManifest, () => this.Config.ShowToasts, v => this.Config.ShowToasts = v, () => "Hear the old shaft", () => "Keep the rare restoration and new-record notices.");
-
-            gmcm.AddSectionTitle(this.ModManifest, () => "The Old Shaft");
-            gmcm.AddNumberOption(this.ModManifest, () => this.Config.FloorInterval, v => this.Config.FloorInterval = v, () => "Etched stopping marks", () => "The space between the floors carved into its panel. The deepest memory always remains.", 1, 25);
-
-            gmcm.AddSectionTitle(this.ModManifest, () => "The Cavern's Hunger");
-            gmcm.AddNumberOption(this.ModManifest, () => (float)this.Config.FadePercentPerHour, v => this.Config.FadePercentPerHour = v, () => "The cavern's hunger", () => "How much of the remembered path the stone reclaims each hour, including sleep.", 0f, 5f, 0.05f);
-
-            gmcm.AddSectionTitle(this.ModManifest, () => "Mercies");
-            gmcm.AddNumberOption(this.ModManifest, () => this.Config.MinFoothold, v => this.Config.MinFoothold = v, () => "Memory that cannot fade", () => "The shallowest path the stone must remember forever.", 0, 500);
-            gmcm.AddNumberOption(this.ModManifest, () => (float)this.Config.LuckInfluence, v => this.Config.LuckInfluence = v, () => "Fortune's mercy", () => "How strongly fortune calms—or provokes—the cavern. At zero, fortune is silent.", 0f, 5f, 0.25f);
-        }
-
-        private void ResetConfig()
+        internal void ResetConfig()
         {
             this.Config = new ModConfig();
             this.Manager = new FootholdManager(this.Config);
         }
 
-        private void SaveConfig()
+        internal void SaveConfig()
         {
             this.Manager = new FootholdManager(this.Config);
             this.Helper.WriteConfig(this.Config);
         }
 
+        /// <summary>Console-command hook: force the repair state and repaint the fixture.</summary>
+        internal void SetRepairedForTesting(bool repaired)
+        {
+            this.Data.IsRepaired = repaired;
+            this.Data.DataVersion = CurrentDataVersion;
+            this.repairAnimationTicksRemaining = 0;
+            ElevatorPrototype.EnsureSprite(Game1.currentLocation, this.Sprites, this.Data.IsRepaired, repairAnimationElapsed: -1);
+        }
+
+        /*********
+        ** Private methods
+        *********/
         /// <summary>Load this save's foothold state.</summary>
         private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
         {
-            FootholdSaveData? loaded = this.Helper.Data.ReadSaveData<FootholdSaveData>(SaveKey);
-            if (loaded is null)
-            {
-                this.Data = new FootholdSaveData { DataVersion = CurrentDataVersion };
-            }
-            else
-            {
-                this.Data = loaded;
-            }
+            this.data = this.Helper.Data.ReadSaveData<FootholdSaveData>(SaveKey)
+                ?? new FootholdSaveData { DataVersion = CurrentDataVersion };
 
             MigrateSaveData(this.Data);
             this.ApplyPendingSleepFade();
             this.pendingRecordFloor = 0;
             this.repairAnimationTicksRemaining = 0;
-            this.lastRepairCue = -1;
             this.lastRecordToastVariant = -1;
             this.StoryNotice.Clear();
-            this.ResetHealthObservation();
+            this.damageWatcher.Reset();
             this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
         }
 
@@ -226,7 +162,7 @@ namespace QisFadingElevator
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
             this.ApplyPendingSleepFade();
-            this.ResetHealthObservation();
+            this.damageWatcher.Reset();
         }
 
         /// <summary>Accumulate active world-clock minutes and fade once for every complete in-game hour.</summary>
@@ -248,7 +184,7 @@ namespace QisFadingElevator
             if (!Context.IsWorldReady)
                 return;
 
-            this.ObserveHealthLoss();
+            this.damageWatcher.Observe();
             this.StoryNotice.Update();
             this.UpdateRepairAnimation();
             this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
@@ -256,7 +192,7 @@ namespace QisFadingElevator
             if (this.Config.Enabled)
             {
                 int repairElapsed = this.repairAnimationTicksRemaining > 0
-                    ? RepairAnimationTotalTicks - this.repairAnimationTicksRemaining
+                    ? RepairSequence.TotalTicks - this.repairAnimationTicksRemaining
                     : -1;
                 ElevatorPrototype.EnsureSprite(Game1.currentLocation, this.Sprites, this.Data.IsRepaired, repairElapsed);
             }
@@ -282,8 +218,8 @@ namespace QisFadingElevator
         /// <summary>Detect Skull Cavern descents (renew the foothold), and announce records on surfacing.</summary>
         private void OnWarped(object? sender, WarpedEventArgs e)
         {
-            this.CaptureHealthLossBeforeWarp(e.OldLocation);
-            this.ResetHealthObservation();
+            this.damageWatcher.CaptureBeforeWarp(e.OldLocation);
+            this.damageWatcher.Reset();
 
             if (!this.Config.Enabled)
             {
@@ -330,7 +266,7 @@ namespace QisFadingElevator
         }
 
         /// <summary>Apply the requested number of hourly fade pulses and aggregate their HUD feedback.</summary>
-        private void ApplyHourlyFade(int hours)
+        internal void ApplyHourlyFade(int hours)
         {
             int lostFloors = 0;
             bool applied = false;
@@ -352,7 +288,7 @@ namespace QisFadingElevator
         }
 
         /// <summary>Apply a source/severity-scaled foothold loss for one observed Skull Cavern hit.</summary>
-        private FadeResult ApplyDamagePenalty(int requestedFloors)
+        internal FadeResult ApplyDamagePenalty(int requestedFloors)
         {
             FadeResult fade = this.Manager.ApplyDamageFade(this.Data, requestedFloors);
             if (!fade.Applied)
@@ -361,73 +297,6 @@ namespace QisFadingElevator
             this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
             this.Gauge.PulseDecay(fade.LostFloors, fromDamage: true);
             return fade;
-        }
-
-        /// <summary>Translate actual health loss into memory loss; explosions/hazards bite harder than creatures.</summary>
-        private static int DamageFloorsFor(int healthLost, DamageSource source)
-        {
-            int severity = Math.Max(1, healthLost);
-            int floors = severity switch
-            {
-                <= 10 => 1,
-                <= 20 => 2,
-                <= 35 => 3,
-                _ => 4
-            };
-
-            if (source == DamageSource.Blast && severity > 10)
-                floors++;
-            return Math.Min(5, floors);
-        }
-
-        /// <summary>
-        /// Poll local health once per update. Stardew applies each hit atomically and grants invincibility
-        /// frames, so one downward transition represents one enemy, bomb, trap, or exhaustion hit—not HP lost.
-        /// </summary>
-        private void ObserveHealthLoss()
-        {
-            int currentHealth = Game1.player.health;
-            bool inCavern = ElevatorPrototype.IsSkullCavernFloor(Game1.currentLocation);
-            if (this.Config.Enabled
-                && this.Data.IsRepaired
-                && this.lastObservedHealth >= 0
-                && this.lastObservedInCavern
-                && inCavern
-                && currentHealth < this.lastObservedHealth)
-            {
-                int healthLost = this.lastObservedHealth - currentHealth;
-                this.ApplyDamagePenalty(DamageFloorsFor(healthLost, DamageSource.Other));
-            }
-
-            this.lastObservedHealth = currentHealth;
-            this.lastObservedInCavern = inCavern;
-        }
-
-        /// <summary>Catch a lethal/final hit if the game warped the farmer out before the next update tick.</summary>
-        private void CaptureHealthLossBeforeWarp(GameLocation oldLocation)
-        {
-            if (this.Config.Enabled
-                && this.Data.IsRepaired
-                && this.lastObservedHealth >= 0
-                && ElevatorPrototype.IsSkullCavernFloor(oldLocation)
-                && Game1.player.health < this.lastObservedHealth)
-            {
-                int healthLost = this.lastObservedHealth - Game1.player.health;
-                this.ApplyDamagePenalty(DamageFloorsFor(healthLost, DamageSource.Other));
-            }
-        }
-
-        private void ResetHealthObservation()
-        {
-            if (!Context.IsWorldReady)
-            {
-                this.lastObservedHealth = -1;
-                this.lastObservedInCavern = false;
-                return;
-            }
-
-            this.lastObservedHealth = Game1.player.health;
-            this.lastObservedInCavern = ElevatorPrototype.IsSkullCavernFloor(Game1.currentLocation);
         }
 
         /// <summary>Convert Stardew's HHMM clock values into elapsed playable minutes, ignoring day resets.</summary>
@@ -559,158 +428,30 @@ namespace QisFadingElevator
             this.Data.IsRepaired = true;
             this.Data.FadeMinutes = 0;
             this.Data.HourlyFadeRemainder = 0;
-            this.repairAnimationTicksRemaining = RepairAnimationTotalTicks;
-            this.lastRepairCue = -1;
+            this.repairAnimationTicksRemaining = RepairSequence.TotalTicks;
             this.StoryNotice.Clear();
+
+            // Hold the farmer facing the machine for the scene, vanilla-cutscene style.
+            who.completelyStopAnimatingOrDoingAction();
+            who.faceDirection(0);
+            who.freezePause = RepairSequence.TotalTicks * 1000 / 60 + 250;
         }
 
-        /// <summary>Drive three physical repair impacts followed by the Qi seam awakening.</summary>
+        /// <summary>Advance the repair scene one tick: impacts, settle, power, seam climb, ignition.</summary>
         private void UpdateRepairAnimation()
         {
             if (this.repairAnimationTicksRemaining <= 0)
                 return;
 
-            int elapsed = RepairAnimationTotalTicks - this.repairAnimationTicksRemaining;
-            int cue = elapsed switch
-            {
-                < 28 => 0,
-                < 56 => 1,
-                < 72 => 2,
-                < 92 => 3,
-                _ => 4
-            };
-            if (cue != this.lastRepairCue)
-            {
-                this.lastRepairCue = cue;
-                switch (cue)
-                {
-                    case 0:
-                        Game1.playSound("clank");
-                        break;
-                    case 1:
-                    case 2:
-                        Game1.playSound("hammer");
-                        break;
-                    case 3:
-                        Game1.playSound("crystal");
-                        break;
-                }
-            }
+            int elapsed = RepairSequence.TotalTicks - this.repairAnimationTicksRemaining;
+            RepairEffects.FireBeats(Game1.currentLocation, elapsed, this.Sprites);
 
             this.repairAnimationTicksRemaining--;
             if (this.repairAnimationTicksRemaining == 0)
             {
-                Game1.playSound("secret1");
                 this.Gauge.Pulse();
                 this.Toast("toast.repair-complete");
             }
-        }
-
-        /// <summary>Console command: seed a foothold so the elevator/gauge can be tested without grinding down the cavern.</summary>
-        private void CmdSetFoothold(string command, string[] args)
-        {
-            if (!Context.IsWorldReady)
-            {
-                this.Monitor.Log("Load a save first.", LogLevel.Warn);
-                return;
-            }
-            if (args.Length < 1 || !int.TryParse(args[0], out int floor) || floor < 0)
-            {
-                this.Monitor.Log("Usage: qfe_foothold <floor>  (e.g. qfe_foothold 120)", LogLevel.Warn);
-                return;
-            }
-
-            this.Data.Foothold = floor;
-            this.Data.DeepestFloor = floor;
-            this.Data.FadeMinutes = 0;
-            this.Data.HourlyFadeRemainder = 0;
-            this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
-            this.Gauge.Pulse();
-            this.Monitor.Log($"The old shaft now remembers floor {floor}.", LogLevel.Info);
-        }
-
-        /// <summary>Console command: trigger hourly decay without waiting on the game clock.</summary>
-        private void CmdDecay(string command, string[] args)
-        {
-            if (!Context.IsWorldReady)
-            {
-                this.Monitor.Log("Load a save first.", LogLevel.Warn);
-                return;
-            }
-
-            int hours = 1;
-            if (args.Length > 0 && (!int.TryParse(args[0], out hours) || hours < 1 || hours > 24))
-            {
-                this.Monitor.Log("Usage: qfe_decay [hours from 1 to 24]", LogLevel.Warn);
-                return;
-            }
-
-            this.ApplyHourlyFade(hours);
-            this.Monitor.Log($"Applied {hours} hourly fade pulse(s). Foothold is now {this.Manager.ReachableFloor(this.Data)} ({this.Data.Foothold:0.00} exact).", LogLevel.Info);
-        }
-
-        /// <summary>Console command: test the variable hit curve without taking actual damage.</summary>
-        private void CmdDamage(string command, string[] args)
-        {
-            if (!Context.IsWorldReady)
-            {
-                this.Monitor.Log("Load a save first.", LogLevel.Warn);
-                return;
-            }
-
-            int healthLost = 10;
-            if (args.Length > 0 && (!int.TryParse(args[0], out healthLost) || healthLost < 1 || healthLost > 999))
-            {
-                this.Monitor.Log("Usage: qfe_damage [health lost from 1 to 999] [monster|blast|other]", LogLevel.Warn);
-                return;
-            }
-
-            DamageSource source = DamageSource.Monster;
-            if (args.Length > 1 && !Enum.TryParse(args[1], ignoreCase: true, out source))
-            {
-                this.Monitor.Log("Source must be monster, blast, or other.", LogLevel.Warn);
-                return;
-            }
-
-            int requested = DamageFloorsFor(healthLost, source);
-            FadeResult fade = this.ApplyDamagePenalty(requested);
-            this.Monitor.Log($"{source} hit for {healthLost} health requested {requested} floor(s); lost {fade.LostFloors}. Foothold is now {this.Manager.ReachableFloor(this.Data)}.", LogLevel.Info);
-        }
-
-        /// <summary>Console command: toggle repaired/broken art and mechanics for testing.</summary>
-        private void CmdRepair(string command, string[] args)
-        {
-            if (!Context.IsWorldReady)
-            {
-                this.Monitor.Log("Load a save first.", LogLevel.Warn);
-                return;
-            }
-            if (args.Length < 1 || (args[0] != "on" && args[0] != "off"))
-            {
-                this.Monitor.Log("Usage: qfe_repair <on|off>", LogLevel.Warn);
-                return;
-            }
-
-            this.Data.IsRepaired = args[0] == "on";
-            this.Data.DataVersion = CurrentDataVersion;
-            this.repairAnimationTicksRemaining = 0;
-            this.lastRepairCue = -1;
-            ElevatorPrototype.EnsureSprite(Game1.currentLocation, this.Sprites, this.Data.IsRepaired, repairAnimationElapsed: -1);
-            this.Monitor.Log(this.Data.IsRepaired ? "The old shaft is repaired." : "The old shaft is broken.", LogLevel.Info);
-        }
-
-        /// <summary>Console command: print the current foothold state.</summary>
-        private void CmdStatus(string command, string[] args)
-        {
-            if (!Context.IsWorldReady)
-            {
-                this.Monitor.Log("Load a save first.", LogLevel.Warn);
-                return;
-            }
-
-            this.Monitor.Log(
-                $"Repaired: {this.Data.IsRepaired} | Foothold: {this.Manager.ReachableFloor(this.Data)} ({this.Data.Foothold:0.00} exact) | Record: {this.Data.DeepestFloor} | Hour clock: {this.Data.FadeMinutes}/60 min | Fade debt: {this.Data.HourlyFadeRemainder:0.000} | HasSkullKey: {Game1.player.hasSkullKey}",
-                LogLevel.Info);
         }
 
         /// <summary>Show one cooldown-controlled lower-left notice; never enqueue or stack.</summary>
@@ -742,14 +483,5 @@ namespace QisFadingElevator
                 ? this.Helper.Translation.Get(key)
                 : this.Helper.Translation.Get(key, tokens);
         }
-
-        private enum DamageSource
-        {
-            Monster,
-            Blast,
-            Other
-        }
-
-        private readonly record struct DamagePatchState(int Health, bool WasInvincible, int IncomingDamage, DamageSource Source);
     }
 }

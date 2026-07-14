@@ -19,13 +19,18 @@ namespace QisFadingElevator
 
         private const int FixtureSpriteId = 813057;
         private const int GlowSpriteId = 813058;
+        private const int ShroudSpriteId = 813059;
         private const int Scale = 4;
         private const int NativeWidth = 17;
         private const int NativeHeight = 32;
         private const int MineAllocationWidthInTiles = 1;
         private const int AllocationHeightInTiles = 2;
         private const int SkullCavernAreaId = 121;
-        private static readonly Color FallbackMineTint = new(245, 168, 78);
+
+        /// <summary>How strongly the machine body inherits the sampled wall color on generated floors.</summary>
+        private const float BodyTintStrength = 0.22f;
+
+        private static readonly Color FallbackWallColor = new(150, 100, 52);
         private static readonly Dictionary<string, Color> TilePaletteCache = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Whether this is a generated Skull Cavern floor (not the entrance foyer).</summary>
@@ -51,82 +56,141 @@ namespace QisFadingElevator
                 return;
             }
 
-            TemporaryAnimatedSprite fixture = GetOrCreateSprite(location, sprites, FixtureSpriteId);
-            TemporaryAnimatedSprite glow = GetOrCreateSprite(location, sprites, GlowSpriteId);
-            bool isActive = location == Game1.currentLocation && IsPlayerInRange(placement);
             bool isRepairing = isFoyer && repairAnimationElapsed >= 0;
-            bool showBroken = isFoyer && (!isRepaired || (isRepairing && repairAnimationElapsed < 72));
-            Rectangle source = isFoyer
-                ? showBroken ? SpriteSheet.FoyerBroken : SpriteSheet.FoyerElevator
-                : isActive ? SpriteSheet.ElevatorActive : SpriteSheet.ElevatorIdle;
-            Rectangle glowSource;
-            if (isFoyer && isRepairing)
+            Vector2 drawPosition = placement.WorldPosition + GetRepairJolt(isRepairing, repairAnimationElapsed);
+            bool isActive = location == Game1.currentLocation && IsPlayerInRange(placement);
+            double elapsedMs = Game1.currentGameTime.TotalGameTime.TotalMilliseconds;
+            float breath = (float)((Math.Sin(elapsedMs / 230.0) + 1.0) * 0.5);
+
+            // The machine keeps its true materials everywhere; generated floors only whisper the wall
+            // color into it, while the separate rock shroud takes the full sampled tint.
+            TemporaryAnimatedSprite fixture = GetOrCreateSprite(location, sprites, FixtureSpriteId);
+            Rectangle bodySource = isFoyer
+                ? (!isRepaired || (isRepairing && repairAnimationElapsed < RepairSequence.BodyRepairedAt))
+                    ? SpriteSheet.FoyerBroken
+                    : SpriteSheet.FoyerBody
+                : SpriteSheet.MineBody;
+            ApplySprite(fixture, sprites, bodySource, drawPosition);
+            fixture.color = isFoyer ? Color.White : Color.Lerp(Color.White, placement.WallColor, BodyTintStrength);
+
+            if (isFoyer)
             {
-                glowSource = repairAnimationElapsed < 72
-                    ? (repairAnimationElapsed / 28) % 2 == 0 ? SpriteSheet.RepairImpactA : SpriteSheet.RepairImpactB
-                    : SpriteSheet.RepairAwaken;
-            }
-            else if (isFoyer && !isRepaired)
-            {
-                glowSource = SpriteSheet.FoyerBrokenGlow;
+                RemoveSpriteById(location, ShroudSpriteId);
             }
             else
             {
-                glowSource = isFoyer
-                    ? isActive ? SpriteSheet.FoyerGlowActive : SpriteSheet.FoyerGlowIdle
-                    : isActive ? SpriteSheet.ElevatorGlowActive : SpriteSheet.ElevatorGlowIdle;
+                TemporaryAnimatedSprite shroud = GetOrCreateSprite(location, sprites, ShroudSpriteId);
+                ApplySprite(shroud, sprites, SpriteSheet.MineShroud, drawPosition);
+                shroud.color = CompensateForMultiply(placement.WallColor);
+                shroud.layerDepth = (placement.WorldPosition.Y + 8f) / 10000f + 0.000001f;
             }
 
-            Vector2 drawPosition = placement.WorldPosition;
-            if (isRepairing && repairAnimationElapsed < 72 && repairAnimationElapsed % 28 < 5)
-            {
-                int direction = repairAnimationElapsed % 2 == 0 ? -1 : 1;
-                drawPosition.X += direction * Scale;
-            }
-
-            fixture.texture = sprites;
-            fixture.position = drawPosition;
-            fixture.sourceRect = source;
-            fixture.sourceRectStartingPos = new Vector2(source.X, source.Y);
-            fixture.scale = Scale;
-            fixture.color = placement.Tint;
-
-            glow.texture = sprites;
-            glow.position = drawPosition;
-            glow.sourceRect = glowSource;
-            glow.sourceRectStartingPos = new Vector2(glowSource.X, glowSource.Y);
-            glow.scale = Scale;
-            double elapsed = Game1.currentGameTime.TotalGameTime.TotalMilliseconds;
-            float breath = (float)((Math.Sin(elapsed / 230.0) + 1.0) * 0.5);
-            float glowOpacity;
-            if (isRepairing)
-            {
-                if (repairAnimationElapsed < 72)
-                {
-                    int impactTick = repairAnimationElapsed % 28;
-                    float impact = Math.Max(0f, 1f - impactTick / 12f);
-                    glowOpacity = 0.12f + impact * 0.82f;
-                }
-                else
-                {
-                    glowOpacity = 0.78f + breath * 0.2f;
-                }
-            }
-            else if (isFoyer && !isRepaired)
-            {
-                glowOpacity = 0.14f + breath * 0.08f;
-            }
-            else
-            {
-                glowOpacity = isFoyer
-                    ? isActive ? 0.68f + breath * 0.16f : 0.42f + breath * 0.08f
-                    : isActive ? 0.72f + breath * 0.28f : 0.48f + breath * 0.12f;
-            }
+            TemporaryAnimatedSprite glow = GetOrCreateSprite(location, sprites, GlowSpriteId);
+            (Rectangle glowSource, float glowOpacity, Vector2 glowOffset) = isRepairing
+                ? GetRepairGlow(repairAnimationElapsed, breath)
+                : GetRestingGlow(isFoyer, isRepaired, isActive, breath);
+            ApplySprite(glow, sprites, glowSource, drawPosition + glowOffset);
             glow.color = Color.White * glowOpacity;
 
             // A wall fixture must sort behind a farmer standing on the floor in front of it.
             fixture.layerDepth = (placement.WorldPosition.Y + 8f) / 10000f;
-            glow.layerDepth = fixture.layerDepth + 0.000001f;
+            glow.layerDepth = fixture.layerDepth + 0.000002f;
+        }
+
+        /// <summary>Resting-state glow: a dim socket ember when broken, a breathing crystal otherwise.</summary>
+        private static (Rectangle, float, Vector2) GetRestingGlow(bool isFoyer, bool isRepaired, bool isActive, float breath)
+        {
+            if (isFoyer && !isRepaired)
+                return (SpriteSheet.FoyerBrokenGlow, 0.6f + breath * 0.25f, Vector2.Zero);
+
+            Rectangle source = isFoyer
+                ? isActive ? SpriteSheet.FoyerGlowActive : SpriteSheet.FoyerGlowIdle
+                : isActive ? SpriteSheet.MineGlowActive : SpriteSheet.MineGlowIdle;
+            float opacity = isActive ? 0.78f + breath * 0.22f : 0.5f + breath * 0.14f;
+            return (source, opacity, Vector2.Zero);
+        }
+
+        /// <summary>Map a repair-scene tick to overlay frame, opacity, and offset (for the seam slice).</summary>
+        private static (Rectangle, float, Vector2) GetRepairGlow(int elapsed, float breath)
+        {
+            if (elapsed >= RepairSequence.Impact1 && elapsed < RepairSequence.Impact1 + RepairSequence.FlashTicks)
+                return (SpriteSheet.RepairFlashA, FlashFade(elapsed - RepairSequence.Impact1), Vector2.Zero);
+            if (elapsed >= RepairSequence.Impact2 && elapsed < RepairSequence.Impact2 + RepairSequence.FlashTicks)
+                return (SpriteSheet.RepairFlashB, FlashFade(elapsed - RepairSequence.Impact2), Vector2.Zero);
+            if (elapsed >= RepairSequence.Impact3 && elapsed < RepairSequence.Impact3 + RepairSequence.FlashTicks + 3)
+                return (SpriteSheet.RepairFlashC, FlashFade(elapsed - RepairSequence.Impact3), Vector2.Zero);
+
+            if (elapsed >= RepairSequence.BatteryAt && elapsed < RepairSequence.SeamStart)
+            {
+                // The dead socket flickers twice before holding: off-on-off-on.
+                int flickerTick = (elapsed - RepairSequence.BatteryAt) / 3;
+                float opacity = flickerTick switch
+                {
+                    0 or 2 => 0.15f,
+                    1 => 0.75f,
+                    _ => 0.55f + breath * 0.2f
+                };
+                return (SpriteSheet.FoyerGlowIdle, opacity, Vector2.Zero);
+            }
+
+            if (elapsed >= RepairSequence.SeamStart && elapsed < RepairSequence.SeamEnd)
+            {
+                // Reveal the seam bottom-up: light climbing from the threshold toward the crown.
+                float progress = (elapsed - RepairSequence.SeamStart) / (float)(RepairSequence.SeamEnd - RepairSequence.SeamStart);
+                int topRow = 29 - (int)Math.Round(progress * 27);
+                Rectangle slice = new(
+                    SpriteSheet.RepairSeam.X,
+                    SpriteSheet.RepairSeam.Y + topRow,
+                    SpriteSheet.RepairSeam.Width,
+                    SpriteSheet.RepairSeam.Height - topRow);
+                return (slice, 0.85f + progress * 0.15f, new Vector2(0, topRow * Scale));
+            }
+
+            if (elapsed >= RepairSequence.FlareSmallAt && elapsed < RepairSequence.FlareBigAt)
+                return (SpriteSheet.RepairFlareA, 1f, Vector2.Zero);
+            if (elapsed >= RepairSequence.FlareBigAt && elapsed < RepairSequence.FlareEnd)
+                return (SpriteSheet.RepairFlareB, 1f, Vector2.Zero);
+            if (elapsed >= RepairSequence.FlareEnd)
+            {
+                float settle = Math.Min(1f, (elapsed - RepairSequence.FlareEnd) / 20f);
+                return (SpriteSheet.FoyerGlowActive, 0.5f + settle * 0.28f + breath * 0.22f * settle, Vector2.Zero);
+            }
+
+            // Between beats the broken socket ember barely holds on.
+            return (SpriteSheet.FoyerBrokenGlow, 0.5f + breath * 0.2f, Vector2.Zero);
+        }
+
+        private static float FlashFade(int ticksIn)
+        {
+            return Math.Max(0.25f, 1f - ticksIn * 0.09f);
+        }
+
+        /// <summary>Physical recoil for each seating impact; the third blow lands hardest.</summary>
+        private static Vector2 GetRepairJolt(bool isRepairing, int elapsed)
+        {
+            if (!isRepairing || !RepairSequence.IsImpactBeat(elapsed, out int impactStart))
+                return Vector2.Zero;
+
+            int ticksIn = elapsed - impactStart;
+            if (ticksIn is < 0 or >= RepairSequence.JoltTicks)
+                return Vector2.Zero;
+
+            int sway = ticksIn % 2 == 0 ? 1 : -1;
+            return impactStart switch
+            {
+                RepairSequence.Impact1 => new Vector2(sway * Scale, 0),
+                RepairSequence.Impact2 => new Vector2(-sway * Scale, 0),
+                _ => new Vector2(sway * Scale, ticksIn < 3 ? Scale : 0)
+            };
+        }
+
+        private static void ApplySprite(TemporaryAnimatedSprite sprite, Texture2D sprites, Rectangle source, Vector2 position)
+        {
+            sprite.texture = sprites;
+            sprite.position = position;
+            sprite.sourceRect = source;
+            sprite.sourceRectStartingPos = new Vector2(source.X, source.Y);
+            sprite.scale = Scale;
         }
 
         private static TemporaryAnimatedSprite GetOrCreateSprite(GameLocation location, Texture2D sprites, int id)
@@ -152,15 +216,19 @@ namespace QisFadingElevator
             return sprite;
         }
 
-        /// <summary>Remove our fixture sprite without touching any temporary sprites owned by the game or other mods.</summary>
+        /// <summary>Remove our fixture sprites without touching any temporary sprites owned by the game or other mods.</summary>
         public static void RemoveSprite(GameLocation location)
         {
-            TemporaryAnimatedSprite? fixture = location.TemporarySprites.FirstOrDefault(sprite => sprite.id == FixtureSpriteId);
-            TemporaryAnimatedSprite? glow = location.TemporarySprites.FirstOrDefault(sprite => sprite.id == GlowSpriteId);
-            if (fixture is not null)
-                location.TemporarySprites.Remove(fixture);
-            if (glow is not null)
-                location.TemporarySprites.Remove(glow);
+            RemoveSpriteById(location, FixtureSpriteId);
+            RemoveSpriteById(location, ShroudSpriteId);
+            RemoveSpriteById(location, GlowSpriteId);
+        }
+
+        private static void RemoveSpriteById(GameLocation location, int id)
+        {
+            TemporaryAnimatedSprite? sprite = location.TemporarySprites.FirstOrDefault(candidate => candidate.id == id);
+            if (sprite is not null)
+                location.TemporarySprites.Remove(sprite);
         }
 
         /// <summary>Whether the local player is next to the current fixture.</summary>
@@ -197,6 +265,39 @@ namespace QisFadingElevator
             return bounds.Contains((int)absolutePixels.X, (int)absolutePixels.Y);
         }
 
+        /// <summary>World-pixel center of the crown dial, where ignition effects bloom.</summary>
+        public static bool TryGetCrownCenter(GameLocation? location, out Vector2 center)
+        {
+            center = Vector2.Zero;
+            if (!TryGetPlacement(location, out ElevatorPlacement placement))
+                return false;
+
+            center = placement.WorldPosition + new Vector2(8.5f * Scale, 3.5f * Scale);
+            return true;
+        }
+
+        /// <summary>World-pixel point on the right jamb where the battery seats.</summary>
+        public static bool TryGetSocketPoint(GameLocation? location, out Vector2 point)
+        {
+            point = Vector2.Zero;
+            if (!TryGetPlacement(location, out ElevatorPlacement placement))
+                return false;
+
+            point = placement.WorldPosition + new Vector2(13.5f * Scale, 23.5f * Scale);
+            return true;
+        }
+
+        /// <summary>World-pixel rectangle of the fixture's threshold, where impact dust rises.</summary>
+        public static bool TryGetThresholdPoint(GameLocation? location, out Vector2 point)
+        {
+            point = Vector2.Zero;
+            if (!TryGetPlacement(location, out ElevatorPlacement placement))
+                return false;
+
+            point = placement.WorldPosition + new Vector2(8.5f * Scale, 28f * Scale);
+            return true;
+        }
+
         /// <summary>Resolve the fixed foyer anchor or a generated-floor anchor beside the entrance ladder.</summary>
         private static bool TryGetPlacement(GameLocation? location, out ElevatorPlacement placement)
         {
@@ -207,8 +308,7 @@ namespace QisFadingElevator
             if (string.Equals(location.NameOrUniqueName, FoyerLocationName, StringComparison.OrdinalIgnoreCase))
             {
                 // Keep the fixture centered in the same two-tile foyer niche even though its art is slimmer.
-                // This branch has its own multi-color foyer artwork; don't flatten it through a tint.
-                placement = CreatePlacement(4, 2, allocationWidthInTiles: 2, tint: Color.White);
+                placement = CreatePlacement(4, 2, allocationWidthInTiles: 2, wallColor: Color.White);
                 return true;
             }
 
@@ -226,8 +326,8 @@ namespace QisFadingElevator
 
             // Prefer the right side on ties, matching the foyer and keeping placement visually predictable.
             int tileX = rightScore >= leftScore ? rightX : leftX;
-            Color tint = ResolveWallTint(location, tileX, topY);
-            placement = CreatePlacement(tileX, topY, MineAllocationWidthInTiles, tint);
+            Color wallColor = ResolveWallColor(location, tileX, topY);
+            placement = CreatePlacement(tileX, topY, MineAllocationWidthInTiles, wallColor);
             return true;
         }
 
@@ -284,8 +384,8 @@ namespace QisFadingElevator
             return score;
         }
 
-        /// <summary>Sample the actual patched wall tiles behind the fixture and turn them into a material tint.</summary>
-        private static Color ResolveWallTint(GameLocation location, int tileX, int tileY)
+        /// <summary>Sample the actual patched wall tiles behind the fixture into one raw wall color.</summary>
+        private static Color ResolveWallColor(GameLocation location, int tileX, int tileY)
         {
             var buildings = location.Map.GetLayer("Buildings");
             var front = location.Map.GetLayer("Front");
@@ -310,10 +410,17 @@ namespace QisFadingElevator
                 count++;
             }
 
-            if (count == 0)
-                return FallbackMineTint;
+            return count == 0
+                ? FallbackWallColor
+                : new Color((byte)(red / count), (byte)(green / count), (byte)(blue / count));
+        }
 
-            Color wall = new((byte)(red / count), (byte)(green / count), (byte)(blue / count));
+        /// <summary>
+        /// Brighten a raw wall color so grey shroud pixels multiplied by it land near the wall's own
+        /// values instead of a darker copy, with a touch of saturation kept from the source.
+        /// </summary>
+        private static Color CompensateForMultiply(Color wall)
+        {
             double luma = wall.R * 0.2126 + wall.G * 0.7152 + wall.B * 0.0722;
             const double saturationRetention = 0.92;
             const double neutralMaterialCompensation = 1.55;
@@ -391,16 +498,16 @@ namespace QisFadingElevator
             return (byte)Math.Clamp((int)Math.Round(value), 48, 255);
         }
 
-        private static ElevatorPlacement CreatePlacement(int tileX, int tileY, int allocationWidthInTiles, Color tint)
+        private static ElevatorPlacement CreatePlacement(int tileX, int tileY, int allocationWidthInTiles, Color wallColor)
         {
             int allocationWidth = allocationWidthInTiles * Game1.tileSize;
             int spriteWidth = NativeWidth * Scale;
             Vector2 world = new(
                 tileX * Game1.tileSize + (allocationWidth - spriteWidth) / 2,
                 tileY * Game1.tileSize);
-            return new ElevatorPlacement(world, new Rectangle(tileX, tileY, allocationWidthInTiles, AllocationHeightInTiles), tint);
+            return new ElevatorPlacement(world, new Rectangle(tileX, tileY, allocationWidthInTiles, AllocationHeightInTiles), wallColor);
         }
 
-        private readonly record struct ElevatorPlacement(Vector2 WorldPosition, Rectangle TileArea, Color Tint);
+        private readonly record struct ElevatorPlacement(Vector2 WorldPosition, Rectangle TileArea, Color WallColor);
     }
 }
