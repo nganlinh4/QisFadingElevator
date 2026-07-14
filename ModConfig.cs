@@ -12,23 +12,11 @@ namespace QisFadingElevator
         /// <summary>Spacing between selectable floors in the elevator menu (the exact foothold is always offered too).</summary>
         public int FloorInterval { get; set; } = 5;
 
-        /*********
-        ** Depth bands — deeper footholds fade faster, mapped to the game's own milestones.
-        *********/
-        /// <summary>Floors at or below this depth fade slowest (the "approach").</summary>
-        public int ShallowBandMaxFloor { get; set; } = 50;
-
-        /// <summary>Floors at or below this depth fade at the mid rate (the "climb"). Above it is Qi's Abyss.</summary>
-        public int MidBandMaxFloor { get; set; } = 100;
-
-        /// <summary>Hourly fade for shallow footholds, as a percent of current depth.</summary>
-        public double ShallowFadePercentPerHour { get; set; } = 0.125;
-
-        /// <summary>Hourly fade for mid footholds, as a percent of current depth.</summary>
-        public double MidFadePercentPerHour { get; set; } = 0.5;
-
-        /// <summary>Hourly fade for deep footholds (Qi's Abyss), as a percent of current depth.</summary>
-        public double DeepFadePercentPerHour { get; set; } = 0.9375;
+        /// <summary>
+        /// Hourly fade as a percent of the current foothold. Five percent means floor 10 loses one
+        /// floor in two neutral-luck hours, while floor 100 loses one in twelve minutes.
+        /// </summary>
+        public double FadePercentPerHour { get; set; } = 5.0;
 
         /*********
         ** Softeners

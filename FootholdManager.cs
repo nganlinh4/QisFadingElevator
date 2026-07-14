@@ -32,7 +32,7 @@ namespace QisFadingElevator
             return Math.Max(this.config.MinFoothold, (int)Math.Floor(data.Foothold));
         }
 
-        /// <summary>Whether the current depth band has an hourly fade to apply.</summary>
+        /// <summary>Whether the current foothold has an hourly fade to apply.</summary>
         public bool WouldHourlyFade(FootholdSaveData data)
         {
             return data.Foothold > this.config.MinFoothold && this.FadeRateFor(data.Foothold) > 0;
@@ -109,14 +109,10 @@ namespace QisFadingElevator
             };
         }
 
-        /// <summary>The hourly fade percent for a foothold at the given depth.</summary>
+        /// <summary>The continuous hourly fade percent at every depth.</summary>
         private double FadeRateFor(double floor)
         {
-            if (floor <= this.config.ShallowBandMaxFloor)
-                return this.config.ShallowFadePercentPerHour;
-            if (floor <= this.config.MidBandMaxFloor)
-                return this.config.MidFadePercentPerHour;
-            return this.config.DeepFadePercentPerHour;
+            return this.config.FadePercentPerHour;
         }
     }
 }

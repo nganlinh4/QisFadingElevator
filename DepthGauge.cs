@@ -99,7 +99,12 @@ namespace QisFadingElevator
             const int bodyHeight = segmentHeight * segmentCount;
             const int capHeight = 4 * scale;
             int x = 32;
-            int y = Game1.uiViewport.Height / 2 - bodyHeight / 2;
+            // Keep the complete instrument below the vanilla mine-floor badge, but above the
+            // center-left lane where item pickup notices accumulate. On short viewports the icon
+            // begins at 112px; larger viewports place the gauge around the upper quarter.
+            const int headerClearance = 39;
+            const int safeTop = 112;
+            int y = Math.Max(safeTop + headerClearance, Game1.uiViewport.Height / 4 - bodyHeight / 2);
 
             int FloorToY(double floor)
             {

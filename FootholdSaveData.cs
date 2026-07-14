@@ -26,5 +26,8 @@ namespace QisFadingElevator
         /// an infinitesimal percentage from making an integer foothold appear to lose a full floor early.
         /// </summary>
         public double HourlyFadeRemainder { get; set; }
+
+        /// <summary>Minutes from the last bedtime until 6:00 AM, waiting to be faded next morning.</summary>
+        public int PendingSleepMinutes { get; set; }
     }
 }

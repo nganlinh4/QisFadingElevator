@@ -15,21 +15,21 @@ namespace QisFadingElevator
         private const int DuplicateCooldownTicks = LifetimeTicks;
 
         private string? message;
-        private string? lastMessage;
+        private string? lastKey;
         private int age;
         private int remaining;
         private int duplicateCooldown;
 
-        public void Show(string value)
+        public void Show(string key, string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
                 return;
-            if (value == this.lastMessage && this.duplicateCooldown > 0)
+            if (key == this.lastKey && this.duplicateCooldown > 0)
                 return;
 
             // There is deliberately no queue: a new relevant notice replaces the old one in the same slot.
             this.message = value;
-            this.lastMessage = value;
+            this.lastKey = key;
             this.age = 0;
             this.remaining = LifetimeTicks;
             this.duplicateCooldown = DuplicateCooldownTicks;
@@ -38,7 +38,7 @@ namespace QisFadingElevator
         public void Clear()
         {
             this.message = null;
-            this.lastMessage = null;
+            this.lastKey = null;
             this.age = 0;
             this.remaining = 0;
             this.duplicateCooldown = 0;

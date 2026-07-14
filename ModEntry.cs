@@ -52,6 +52,7 @@ namespace QisFadingElevator
         /// <summary>Transient awakening sequence; repaired state is persisted before this begins.</summary>
         private int repairAnimationTicksRemaining;
         private int lastRepairCue = -1;
+        private int lastRecordToastVariant = -1;
 
         /*********
         ** Public methods
@@ -68,6 +69,7 @@ namespace QisFadingElevator
             helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
             helper.Events.GameLoop.Saving += this.OnSaving;
+            helper.Events.GameLoop.DayEnding += this.OnDayEnding;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
             helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
@@ -148,11 +150,7 @@ namespace QisFadingElevator
             gmcm.AddNumberOption(this.ModManifest, () => this.Config.FloorInterval, v => this.Config.FloorInterval = v, () => "Etched stopping marks", () => "The space between the floors carved into its panel. The deepest memory always remains.", 1, 25);
 
             gmcm.AddSectionTitle(this.ModManifest, () => "The Cavern's Hunger");
-            gmcm.AddNumberOption(this.ModManifest, () => (float)this.Config.ShallowFadePercentPerHour, v => this.Config.ShallowFadePercentPerHour = v, () => "Near the mouth", () => $"How fiercely the stone forgets before floor {this.Config.ShallowBandMaxFloor}.", 0f, 5f, 0.025f);
-            gmcm.AddNumberOption(this.ModManifest, () => (float)this.Config.MidFadePercentPerHour, v => this.Config.MidFadePercentPerHour = v, () => "In the deep", () => $"How fiercely it forgets before floor {this.Config.MidBandMaxFloor}.", 0f, 5f, 0.05f);
-            gmcm.AddNumberOption(this.ModManifest, () => (float)this.Config.DeepFadePercentPerHour, v => this.Config.DeepFadePercentPerHour = v, () => "Beyond Qi's mark", () => "How fiercely the abyss claws back its deepest paths.", 0f, 5f, 0.05f);
-            gmcm.AddNumberOption(this.ModManifest, () => this.Config.ShallowBandMaxFloor, v => this.Config.ShallowBandMaxFloor = v, () => "End of the shallows", null, 1, 500);
-            gmcm.AddNumberOption(this.ModManifest, () => this.Config.MidBandMaxFloor, v => this.Config.MidBandMaxFloor = v, () => "Edge of the abyss", null, 1, 500);
+            gmcm.AddNumberOption(this.ModManifest, () => (float)this.Config.FadePercentPerHour, v => this.Config.FadePercentPerHour = v, () => "The cavern's hunger", () => "How much of the remembered path the stone reclaims each hour, including sleep.", 0f, 5f, 0.05f);
 
             gmcm.AddSectionTitle(this.ModManifest, () => "Mercies");
             gmcm.AddNumberOption(this.ModManifest, () => this.Config.MinFoothold, v => this.Config.MinFoothold = v, () => "Memory that cannot fade", () => "The shallowest path the stone must remember forever.", 0, 500);
@@ -185,9 +183,11 @@ namespace QisFadingElevator
             }
 
             MigrateSaveData(this.Data);
+            this.ApplyPendingSleepFade();
             this.pendingRecordFloor = 0;
             this.repairAnimationTicksRemaining = 0;
             this.lastRepairCue = -1;
+            this.lastRecordToastVariant = -1;
             this.StoryNotice.Clear();
             this.ResetHealthObservation();
             this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
@@ -204,6 +204,7 @@ namespace QisFadingElevator
 
             data.FadeMinutes = Math.Clamp(data.FadeMinutes, 0, 59);
             data.HourlyFadeRemainder = Math.Max(0, data.HourlyFadeRemainder);
+            data.PendingSleepMinutes = Math.Clamp(data.PendingSleepMinutes, 0, 1440);
         }
 
         /// <summary>Persist the foothold state into the save.</summary>
@@ -213,9 +214,18 @@ namespace QisFadingElevator
             this.Helper.Data.WriteSaveData(SaveKey, this.Data);
         }
 
-        /// <summary>A new day resets only transient health observation; sleeping time is not playable clock time.</summary>
+        /// <summary>Capture the actual time between bedtime and 6:00 AM for overnight fading.</summary>
+        private void OnDayEnding(object? sender, DayEndingEventArgs e)
+        {
+            this.Data.PendingSleepMinutes = this.Config.Enabled && this.Data.IsRepaired && Context.IsMainPlayer
+                ? SleepMinutesUntilSix(Game1.timeOfDay)
+                : 0;
+        }
+
+        /// <summary>Apply sleeping time, then reset transient health observation.</summary>
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
+            this.ApplyPendingSleepFade();
             this.ResetHealthObservation();
         }
 
@@ -229,11 +239,7 @@ namespace QisFadingElevator
             if (elapsed <= 0)
                 return;
 
-            this.Data.FadeMinutes += elapsed;
-            int elapsedHours = this.Data.FadeMinutes / 60;
-            this.Data.FadeMinutes %= 60;
-            if (elapsedHours > 0)
-                this.ApplyHourlyFade(elapsedHours);
+            this.AccumulateFadeMinutes(elapsed);
         }
 
         /// <summary>Animate the gauge and keep it in sync with the current foothold.</summary>
@@ -304,8 +310,7 @@ namespace QisFadingElevator
                 {
                     this.Gauge.Pulse();
                     Game1.playSound("secret1");
-                    if (this.Config.ShowToasts)
-                        this.Toast(this.T("toast.new-record", new { floor = surfacedRecord }));
+                    this.ToastRecord(surfacedRecord);
                 }
             }
         }
@@ -316,6 +321,8 @@ namespace QisFadingElevator
             if (!this.Config.Enabled || !Context.IsPlayerFree || e.Button != SButton.MouseRight)
                 return;
             if (!ElevatorPrototype.IsCursorOver(e.Cursor.AbsolutePixels))
+                return;
+            if (!ElevatorPrototype.IsPlayerInRange())
                 return;
 
             this.Helper.Input.Suppress(e.Button);
@@ -434,6 +441,40 @@ namespace QisFadingElevator
             return Math.Max(0, newMinutes - oldMinutes);
         }
 
+        /// <summary>Get in-game minutes from the actual bedtime until the next 6:00 AM.</summary>
+        private static int SleepMinutesUntilSix(int bedtime)
+        {
+            int hour = bedtime / 100;
+            int minute = bedtime % 100;
+            if (hour < 6)
+                hour += 24;
+
+            int elapsedSinceSix = (hour - 6) * 60 + minute;
+            return Math.Clamp(1440 - elapsedSinceSix, 0, 1440);
+        }
+
+        /// <summary>Add waking or sleeping minutes to the same persistent hourly fade clock.</summary>
+        private void AccumulateFadeMinutes(int minutes)
+        {
+            if (minutes <= 0)
+                return;
+
+            this.Data.FadeMinutes += minutes;
+            int elapsedHours = this.Data.FadeMinutes / 60;
+            this.Data.FadeMinutes %= 60;
+            if (elapsedHours > 0)
+                this.ApplyHourlyFade(elapsedHours);
+        }
+
+        /// <summary>Consume sleeping time exactly once after a day transition.</summary>
+        private void ApplyPendingSleepFade()
+        {
+            int minutes = this.Data.PendingSleepMinutes;
+            this.Data.PendingSleepMinutes = 0;
+            if (this.Config.Enabled && this.Data.IsRepaired && Context.IsMainPlayer)
+                this.AccumulateFadeMinutes(minutes);
+        }
+
         /// <summary>Validate the player's situation and open the elevator menu.</summary>
         private void TrySummonElevator()
         {
@@ -442,15 +483,12 @@ namespace QisFadingElevator
 
             if (!Game1.player.hasSkullKey)
             {
-                this.Toast(this.T("toast.no-skull-key"));
+                this.Toast("toast.no-skull-key");
                 return;
             }
 
             if (!ElevatorPrototype.IsPlayerInRange())
-            {
-                this.Toast(this.T("toast.too-far"));
                 return;
-            }
 
             if (!this.Data.IsRepaired)
             {
@@ -460,14 +498,14 @@ namespace QisFadingElevator
 
             if (this.Data.DeepestFloor < 1)
             {
-                this.Toast(this.T("toast.no-foothold"));
+                this.Toast("toast.no-foothold");
                 return;
             }
 
             int reach = this.Manager.ReachableFloor(this.Data);
             if (reach < 1)
             {
-                this.Toast(this.T("toast.memory-spent"));
+                this.Toast("toast.memory-spent");
                 return;
             }
 
@@ -488,7 +526,7 @@ namespace QisFadingElevator
 
             if (!this.HasRepairMaterials(Game1.player))
             {
-                this.Toast(this.T("toast.repair-materials"));
+                Game1.drawObjectDialogue(this.T("repair.inspect"));
                 return;
             }
 
@@ -564,7 +602,7 @@ namespace QisFadingElevator
             {
                 Game1.playSound("secret1");
                 this.Gauge.Pulse();
-                this.Toast(this.T("toast.repair-complete"));
+                this.Toast("toast.repair-complete");
             }
         }
 
@@ -676,10 +714,25 @@ namespace QisFadingElevator
         }
 
         /// <summary>Show one cooldown-controlled lower-left notice; never enqueue or stack.</summary>
-        private void Toast(string message)
+        private void Toast(string key, object? tokens = null)
         {
             if (this.Config.ShowToasts)
-                this.StoryNotice.Show(message);
+                this.StoryNotice.Show(key, this.T(key, tokens));
+        }
+
+        /// <summary>Choose a non-repeating environmental reaction while sharing one record cooldown.</summary>
+        private void ToastRecord(int floor)
+        {
+            const int variantCount = 3;
+            int variant = this.lastRecordToastVariant < 0
+                ? Game1.random.Next(variantCount)
+                : Game1.random.Next(variantCount - 1);
+            if (this.lastRecordToastVariant >= 0 && variant >= this.lastRecordToastVariant)
+                variant++;
+            this.lastRecordToastVariant = variant;
+
+            if (this.Config.ShowToasts)
+                this.StoryNotice.Show("toast.new-record", this.T($"toast.new-record.{variant + 1}", new { floor }));
         }
 
         /// <summary>Look up a translation.</summary>
