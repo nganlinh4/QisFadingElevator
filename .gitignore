@@ -1,0 +1,19 @@
+# .NET build output
+bin/
+obj/
+
+# Local IDE state
+.vs/
+.vscode/
+*.suo
+*.user
+*.DotSettings.user
+
+# Runtime and packaging output
+config.json
+*.log
+*.zip
+
+# OS metadata
+.DS_Store
+Thumbs.db

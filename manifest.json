@@ -1,0 +1,16 @@
+{
+  "Name": "Qi's Fading Elevator",
+  "Author": "tteokl",
+  "Version": "0.7.1",
+  "Description": "An old Qi-touched shaft remembers your path through Skull Cavern, though the hungry stone slowly reclaims every descent.",
+  "UniqueID": "tteokl.QisFadingElevator",
+  "EntryDll": "QisFadingElevator.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": [],
+  "Dependencies": [
+    {
+      "UniqueID": "spacechase0.GenericModConfigMenu",
+      "IsRequired": false
+    }
+  ]
+}
