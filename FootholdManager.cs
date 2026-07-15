@@ -62,9 +62,14 @@ namespace QisFadingElevator
             if (isRecord)
                 data.DeepestFloor = floor;
 
-            // Reaching a floor renews the foothold up to that depth.
+            // Reaching a floor renews the foothold up to that depth. A renewed memory starts
+            // whole: physically re-reaching depth forgives the sub-floor debt already chewed
+            // from the old one. The hourly fade cadence itself never resets.
             if (floor > data.Foothold)
+            {
                 data.Foothold = floor;
+                data.HourlyFadeRemainder = 0;
+            }
 
             return isRecord;
         }
