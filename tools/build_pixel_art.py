@@ -52,9 +52,10 @@ PLATE_SHADOW = warm(194, BONE_RATIO)
 BRASS_RATIO = (1.0, 0.92, 0.78)
 BRASS = warm(176, BRASS_RATIO)
 BRASS_HI = warm(236, BRASS_RATIO)
-# Accent absolutes.
-INTERIOR = (28, 22, 16, 255)
-RIVET = (46, 36, 26, 255)
+# Accent darkness: warm mauve like vanilla's own shadow lines (skull door darks eyedrop to
+# ~(72,48,52)), applied translucently so the gap stays a darker sibling of each room's wall.
+INTERIOR = (58, 40, 42, 255)
+RIVET = (52, 38, 34, 255)
 COPPER = (196, 106, 56, 255)
 COPPER_DARK = (135, 66, 38, 255)
 DEAD_SOCKET = (52, 38, 28, 255)
@@ -127,12 +128,13 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
         hline(sheet, ox + x1, ox + x2, oy + y, color)
 
     # Bone dial crown; the socket pixels stay plate-colored here and the accents darken them.
-    h(6, 10, 1, PLATE_SHADOW)
-    m(5, 2, PLATE_SHADOW); h(6, 10, 2, PLATE_HI)
-    m(4, 3, PLATE_SHADOW); p(5, 3, PLATE_HI); p(6, 3, PLATE_HI)
+    # The crest and rim ends are translucent so the crown melts into the wall behind it.
+    h(6, 10, 1, with_alpha(PLATE_SHADOW, 168))
+    m(5, 2, with_alpha(PLATE_SHADOW, 168)); h(6, 10, 2, PLATE_HI)
+    m(4, 3, with_alpha(PLATE_SHADOW, 168)); p(5, 3, PLATE_HI); p(6, 3, PLATE_HI)
     h(7, 9, 3, PLATE_MID); p(10, 3, PLATE_MID); p(11, 3, PLATE_MID)
     m(4, 4, PLATE_SHADOW); h(5, 11, 4, PLATE_MID)
-    h(4, 12, 5, PLATE_SHADOW)
+    m(4, 5, with_alpha(PLATE_SHADOW, 168)); h(5, 11, 5, PLATE_SHADOW)
 
     # Carved rock shoulders hugging the crown.
     m(3, 3, with_alpha(N_SOFT, 168))
@@ -143,11 +145,12 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
     h(3, 13, 6, N_SHADOW); h(5, 11, 6, N_MID)
     h(3, 13, 7, N_DARK)
 
-    # Jambs: lit left face, shaded right face, room-value edges.
-    vline(sheet, ox + 2, oy + 8, oy + 26, N_DARK)
+    # Jambs: lit left face, shaded right face; the outermost columns are translucent so the
+    # silhouette dissolves into the patched wall instead of cutting a hard rectangle.
+    vline(sheet, ox + 2, oy + 8, oy + 26, with_alpha(N_DARK, 168))
     vline(sheet, ox + 3, oy + 8, oy + 26, N_MID)
     vline(sheet, ox + 13, oy + 8, oy + 26, N_SHADOW)
-    vline(sheet, ox + 14, oy + 8, oy + 26, N_DARK)
+    vline(sheet, ox + 14, oy + 8, oy + 26, with_alpha(N_DARK, 168))
     for y in (10, 17, 24):
         p(3, y, N_LIGHT)
     for y in (12, 20):
@@ -170,8 +173,10 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
     # Threshold steps and the dissolving base skirt.
     h(3, 13, 27, N_DARK)
     h(2, 14, 28, N_SOFT)
+    m(2, 28, with_alpha(N_SOFT, 168))
     h(3, 13, 29, N_SHADOW)
-    h(5, 11, 30, N_DARK)
+    m(3, 29, with_alpha(N_SHADOW, 168))
+    h(5, 11, 30, with_alpha(N_DARK, 168))
     m(1, 28, with_alpha(N_SOFT, 168)); m(0, 28, with_alpha(N_SOFT, 64))
     m(2, 29, with_alpha(N_SHADOW, 112))
     m(4, 30, N_SHADOW); m(3, 30, with_alpha(N_SOFT, 112))
@@ -186,7 +191,8 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
 
 def draw_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
-    """Absolute pixels only: interior openings that stay dark in any room, rivets, copper node."""
+    """Translucent interior darkness (the wall shows through, so contrast scales with the room),
+    plus the few opaque identity pixels: socket void, rivets, copper node."""
     ox, oy = origin
 
     def p(x: int, y: int, color: RGBA) -> None:
@@ -195,16 +201,19 @@ def draw_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
     def h(x1: int, x2: int, y: int, color: RGBA) -> None:
         hline(sheet, ox + x1, ox + x2, oy + y, color)
 
-    p(8, 2, INTERIOR)
-    h(7, 9, 3, INTERIOR)
-    p(8, 4, INTERIOR)
-    h(4, 12, 7, INTERIOR)
-    h(4, 12, 8, INTERIOR)
-    vline(sheet, ox + 8, oy + 9, oy + 25, INTERIOR)
-    h(4, 12, 26, INTERIOR)
-    h(3, 13, 27, with_alpha(INTERIOR, 112))
+    soft = with_alpha(INTERIOR, 112)
+    deep = with_alpha(INTERIOR, 168)
+    p(8, 2, deep)
+    h(7, 9, 3, deep)
+    p(8, 4, deep)
+    h(4, 12, 7, soft)
+    h(4, 12, 8, soft)
+    vline(sheet, ox + 8, oy + 9, oy + 25, soft)
+    p(8, 9, deep); p(8, 25, deep)
+    h(4, 12, 26, soft)
+    h(3, 13, 27, with_alpha(INTERIOR, 64))
     for y in (13, 19):
-        p(6, y, RIVET); p(10, y, RIVET)
+        p(6, y, with_alpha(RIVET, 168)); p(10, y, with_alpha(RIVET, 168))
     p(13, 23, COPPER); p(13, 24, COPPER_DARK)
 
 
@@ -238,12 +247,15 @@ def draw_broken_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
     def p(x: int, y: int, color: RGBA) -> None:
         px(sheet, ox + x, oy + y, color)
 
-    p(8, 2, INTERIOR); p(7, 5, with_alpha(INTERIOR, 168))
-    p(6, 6, INTERIOR); p(6, 9, INTERIOR); p(5, 10, INTERIOR); p(6, 11, with_alpha(INTERIOR, 168))
-    p(4, 14, INTERIOR); p(5, 15, INTERIOR); p(6, 16, INTERIOR); p(7, 17, INTERIOR)
+    deep = with_alpha(INTERIOR, 168)
+    soft = with_alpha(INTERIOR, 112)
+    p(8, 2, deep); p(7, 5, soft)
+    p(6, 6, deep); p(6, 9, deep); p(5, 10, deep); p(6, 11, soft)
+    p(4, 14, deep); p(5, 15, deep); p(6, 16, deep); p(7, 17, deep)
     for y in range(9, 26):
-        p(12, y, INTERIOR)
-    p(13, 23, DEAD_SOCKET); p(13, 24, INTERIOR)
+        p(12, y, soft)
+    p(12, 10, deep); p(12, 18, deep)
+    p(13, 23, DEAD_SOCKET); p(13, 24, deep)
 
 
 def draw_glow(sheet: Image.Image, origin: tuple[int, int], active: bool) -> None:
@@ -400,7 +412,8 @@ def draw_sparks_and_motes(sheet: Image.Image) -> None:
 
 def gauge_rail_row() -> list[RGBA]:
     edge = with_alpha(DESERT_LIGHT, 64)
-    return [edge, DESERT_MID, DESERT_SHADOW, ABYSS, ABYSS, ABYSS, ABYSS, DESERT_SHADOW, DESERT_MID, edge]
+    stone = with_alpha(DESERT_MID, 168)
+    return [edge, stone, DESERT_SHADOW, ABYSS, ABYSS, ABYSS, ABYSS, DESERT_SHADOW, stone, edge]
 
 
 def draw_gauge(sheet: Image.Image) -> None:
@@ -410,8 +423,9 @@ def draw_gauge(sheet: Image.Image) -> None:
     px(sheet, ox + 3, oy + 1, QI_DARK); px(sheet, ox + 4, oy + 1, QI_GLOW)
     px(sheet, ox + 5, oy + 1, QI_PURPLE); px(sheet, ox + 6, oy + 1, QI_DARK)
     hline(sheet, ox + 2, ox + 7, oy + 2, SAND_PALE)
-    px(sheet, ox + 2, oy + 2, BONE_SHADOW); px(sheet, ox + 7, oy + 2, BONE_SHADOW)
+    px(sheet, ox + 2, oy + 2, with_alpha(BONE_SHADOW, 168)); px(sheet, ox + 7, oy + 2, with_alpha(BONE_SHADOW, 168))
     hline(sheet, ox + 1, ox + 8, oy + 3, DESERT_MID)
+    px(sheet, ox + 1, oy + 3, with_alpha(DESERT_MID, 168)); px(sheet, ox + 8, oy + 3, with_alpha(DESERT_MID, 168))
     px(sheet, ox + 2, oy + 3, SAND_LIGHT)
     for x, color in enumerate(gauge_rail_row()):
         px(sheet, ox + x, oy + 4, color)
@@ -427,7 +441,9 @@ def draw_gauge(sheet: Image.Image) -> None:
     for x, color in enumerate(gauge_rail_row()):
         px(sheet, ox + x, oy, color)
     hline(sheet, ox + 1, ox + 8, oy + 1, DESERT_SHADOW)
+    px(sheet, ox + 1, oy + 1, with_alpha(DESERT_SHADOW, 168)); px(sheet, ox + 8, oy + 1, with_alpha(DESERT_SHADOW, 168))
     hline(sheet, ox + 2, ox + 7, oy + 2, DESERT_MID)
+    px(sheet, ox + 2, oy + 2, with_alpha(DESERT_MID, 168))
     px(sheet, ox + 7, oy + 2, SAND_LIGHT)
     hline(sheet, ox + 3, ox + 6, oy + 3, CAVE_SHADOW)
     px(sheet, ox + 4, oy + 4, with_alpha(CAVE_SHADOW, 112)); px(sheet, ox + 5, oy + 4, with_alpha(CAVE_SHADOW, 112))
@@ -436,27 +452,32 @@ def draw_gauge(sheet: Image.Image) -> None:
     ox, oy = GAUGE_MARKER[:2]
     hline(sheet, ox + 3, ox + 8, oy, with_alpha(GOLD_DARK, 168))
     hline(sheet, ox + 1, ox + 10, oy + 1, GOLD_DARK)
+    px(sheet, ox + 1, oy + 1, with_alpha(GOLD_DARK, 168)); px(sheet, ox + 10, oy + 1, with_alpha(GOLD_DARK, 168))
     px(sheet, ox + 2, oy + 1, GOLD)
     hline(sheet, ox, ox + 11, oy + 2, GOLD_DARK)
+    px(sheet, ox, oy + 2, with_alpha(GOLD_DARK, 112)); px(sheet, ox + 11, oy + 2, with_alpha(GOLD_DARK, 112))
     px(sheet, ox + 1, oy + 2, GOLD)
     px(sheet, ox + 5, oy + 2, QI_PURPLE); px(sheet, ox + 6, oy + 2, QI_GLOW)
     hline(sheet, ox + 1, ox + 10, oy + 3, CAVE_SHADOW)
+    px(sheet, ox + 1, oy + 3, with_alpha(CAVE_SHADOW, 168)); px(sheet, ox + 10, oy + 3, with_alpha(CAVE_SHADOW, 168))
     hline(sheet, ox + 3, ox + 8, oy + 4, with_alpha(CAVE_SHADOW, 168))
 
-    # Icon: a tiny lift glyph naming the instrument.
+    # Icon: a tiny lift glyph naming the instrument, its frame translucent like the rail edges.
     ox, oy = GAUGE_ICON[:2]
     px(sheet, ox + 3, oy, QI_PURPLE); px(sheet, ox + 4, oy, QI_DARK)
     hline(sheet, ox + 2, ox + 5, oy + 1, SAND_PALE)
     hline(sheet, ox + 1, ox + 6, oy + 2, DESERT_SHADOW)
+    px(sheet, ox + 1, oy + 2, with_alpha(DESERT_SHADOW, 168)); px(sheet, ox + 6, oy + 2, with_alpha(DESERT_SHADOW, 168))
     for y in range(3, 7):
-        px(sheet, ox + 1, oy + y, DESERT_SHADOW)
+        px(sheet, ox + 1, oy + y, with_alpha(DESERT_SHADOW, 168))
         px(sheet, ox + 2, oy + y, DESERT_MID)
         px(sheet, ox + 3, oy + y, ABYSS)
         px(sheet, ox + 4, oy + y, DESERT_MID)
         px(sheet, ox + 5, oy + y, DESERT_MID)
-        px(sheet, ox + 6, oy + y, DESERT_SHADOW)
+        px(sheet, ox + 6, oy + y, with_alpha(DESERT_SHADOW, 168))
     px(sheet, ox + 2, oy + 4, GOLD_DARK); px(sheet, ox + 4, oy + 4, GOLD_DARK)
     hline(sheet, ox + 1, ox + 6, oy + 7, DESERT_SHADOW)
+    px(sheet, ox + 1, oy + 7, with_alpha(DESERT_SHADOW, 168)); px(sheet, ox + 6, oy + 7, with_alpha(DESERT_SHADOW, 168))
 
     # Fill: a 4x2 energy weave tiled inside the channel.
     ox, oy = GAUGE_FILL[:2]
@@ -498,9 +519,11 @@ def validate(sheet: Image.Image) -> None:
     assert 178 <= median <= 218, f"shell median {median:.0f} off wall-parity target"
     assert min(lumas) >= 130, f"shell has too-dark pixel ({min(lumas):.0f}); darkness belongs to accents"
 
+    # The seam must be continuous, translucent (wall shows through), and warm—never pure black.
     accents = crop(sheet, LIFT_ACCENTS)
     for y in range(9, 26):
-        assert accents.getpixel((8, y))[:3] == (28, 22, 16), f"seam broken at y={y}"
+        pixel = accents.getpixel((8, y))
+        assert pixel[:3] == INTERIOR[:3] and 0 < pixel[3] < 255, f"seam wrong at y={y}: {pixel}"
 
     assert crop(sheet, GLOW_IDLE).getbbox() == (7, 2, 10, 5)
     box = crop(sheet, GLOW_ACTIVE).getbbox()

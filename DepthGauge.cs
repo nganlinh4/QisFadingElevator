@@ -142,7 +142,7 @@ namespace QisFadingElevator
 
             // Below the live fill, the channel keeps a faint violet residue: the memory that faded.
             if (fillBottom < y + bodyHeight)
-                b.Draw(Game1.staminaRect, new Rectangle(channelX, fillBottom, channelWidth, y + bodyHeight - fillBottom), ResidueViolet * (0.16f + breath * 0.05f));
+                b.Draw(Game1.staminaRect, new Rectangle(channelX, fillBottom, channelWidth, y + bodyHeight - fillBottom), ResidueViolet * (0.22f + breath * 0.05f));
 
             // The clamp marker recoils sideways on damage and springs vertically as a loss lands.
             float effectProgress = 1f - this.decayEffect;
