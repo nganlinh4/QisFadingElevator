@@ -95,7 +95,9 @@ namespace QisFadingElevator
             int capHeight = SpriteSheet.GaugeTop.Height * Scale;
             int segmentHeight = SpriteSheet.GaugeMiddle.Height * Scale;
             int bodyHeight = segmentHeight * SegmentCount;
-            int x = 32;
+            // Center the rail under the vanilla mine-floor badge (box spans x=4..47 on screen).
+            const int badgeCenterX = 25;
+            int x = badgeCenterX - capWidth / 2;
             // Keep the complete instrument below the vanilla mine-floor badge, but above the
             // center-left lane where item pickup notices accumulate. On short viewports the icon
             // begins at 112px; larger viewports place the gauge around the upper quarter.
@@ -121,7 +123,7 @@ namespace QisFadingElevator
                 b.Draw(Game1.staminaRect, new Rectangle(x + capWidth - 3 * Scale, tickY, 2 * Scale, 2), etch);
             }
 
-            int channelX = x + 4 * Scale;
+            int channelX = x + 3 * Scale;
             int channelWidth = 4 * Scale;
 
             // Tile the fill weave inside the channel; partial segments stay aligned to native pixels.

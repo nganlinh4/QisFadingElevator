@@ -30,37 +30,12 @@ def with_alpha(color: RGBA, alpha: int) -> RGBA:
     return color[0], color[1], color[2], alpha
 
 
-def mute(color: RGBA, factor: float) -> RGBA:
-    """Pull a color toward its own luma so runtime tinting can add room color without oversaturating."""
-    luma = color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722
-    return (
-        round(color[0] + (luma - color[0]) * factor),
-        round(color[1] + (luma - color[1]) * factor),
-        round(color[2] + (luma - color[2]) * factor),
-        color[3],
-    )
-
-
 def multiply_tint(image: Image.Image, tint: tuple[int, int, int]) -> Image.Image:
     result = Image.new("RGBA", image.size, TRANSPARENT)
     for y in range(image.height):
         for x in range(image.width):
             r, g, b, a = image.getpixel((x, y))
             result.putpixel((x, y), (r * tint[0] // 255, g * tint[1] // 255, b * tint[2] // 255, a))
-    return result
-
-
-def lerp_toward(image: Image.Image, tint: tuple[int, int, int], amount: float) -> Image.Image:
-    """Approximate the runtime Color.Lerp(White, tint, amount) vertex tint on a sprite."""
-    factors = tuple(255 + (channel - 255) * amount for channel in tint)
-    result = Image.new("RGBA", image.size, TRANSPARENT)
-    for y in range(image.height):
-        for x in range(image.width):
-            r, g, b, a = image.getpixel((x, y))
-            result.putpixel(
-                (x, y),
-                (int(r * factors[0] / 255), int(g * factors[1] / 255), int(b * factors[2] / 255), a),
-            )
     return result
 
 

@@ -17,18 +17,15 @@ namespace QisFadingElevator
     {
         public const string FoyerLocationName = "SkullCave";
 
-        private const int FixtureSpriteId = 813057;
+        private const int ShellSpriteId = 813057;
         private const int GlowSpriteId = 813058;
-        private const int ShroudSpriteId = 813059;
+        private const int AccentsSpriteId = 813059;
         private const int Scale = 4;
         private const int NativeWidth = 17;
         private const int NativeHeight = 32;
         private const int MineAllocationWidthInTiles = 1;
         private const int AllocationHeightInTiles = 2;
         private const int SkullCavernAreaId = 121;
-
-        /// <summary>How strongly the machine body inherits the sampled wall color on generated floors.</summary>
-        private const float BodyTintStrength = 0.22f;
 
         private static readonly Color FallbackWallColor = new(150, 100, 52);
         private static readonly Dictionary<string, Color> TilePaletteCache = new(StringComparer.OrdinalIgnoreCase);
@@ -62,50 +59,38 @@ namespace QisFadingElevator
             double elapsedMs = Game1.currentGameTime.TotalGameTime.TotalMilliseconds;
             float breath = (float)((Math.Sin(elapsedMs / 230.0) + 1.0) * 0.5);
 
-            // The machine keeps its true materials everywhere; generated floors only whisper the wall
-            // color into it, while the separate rock shroud takes the full sampled tint.
-            TemporaryAnimatedSprite fixture = GetOrCreateSprite(location, sprites, FixtureSpriteId);
-            Rectangle bodySource = isFoyer
-                ? (!isRepaired || (isRepairing && repairAnimationElapsed < RepairSequence.BodyRepairedAt))
-                    ? SpriteSheet.FoyerBroken
-                    : SpriteSheet.FoyerBody
-                : SpriteSheet.MineBody;
-            ApplySprite(fixture, sprites, bodySource, drawPosition);
-            fixture.color = isFoyer ? Color.White : Color.Lerp(Color.White, placement.WallColor, BodyTintStrength);
+            // The shell relief takes the full sampled wall color so its values land inside the
+            // room's own range; the accents sprite keeps interior darkness and identity untinted.
+            bool showBroken = isFoyer
+                && (!isRepaired || (isRepairing && repairAnimationElapsed < RepairSequence.BodyRepairedAt));
+            TemporaryAnimatedSprite shell = GetOrCreateSprite(location, sprites, ShellSpriteId);
+            ApplySprite(shell, sprites, showBroken ? SpriteSheet.BrokenShell : SpriteSheet.LiftShell, drawPosition);
+            shell.color = CompensateForMultiply(placement.WallColor);
 
-            if (isFoyer)
-            {
-                RemoveSpriteById(location, ShroudSpriteId);
-            }
-            else
-            {
-                TemporaryAnimatedSprite shroud = GetOrCreateSprite(location, sprites, ShroudSpriteId);
-                ApplySprite(shroud, sprites, SpriteSheet.MineShroud, drawPosition);
-                shroud.color = CompensateForMultiply(placement.WallColor);
-                shroud.layerDepth = (placement.WorldPosition.Y + 8f) / 10000f + 0.000001f;
-            }
+            TemporaryAnimatedSprite accents = GetOrCreateSprite(location, sprites, AccentsSpriteId);
+            ApplySprite(accents, sprites, showBroken ? SpriteSheet.BrokenAccents : SpriteSheet.LiftAccents, drawPosition);
+            accents.color = Color.White;
 
             TemporaryAnimatedSprite glow = GetOrCreateSprite(location, sprites, GlowSpriteId);
             (Rectangle glowSource, float glowOpacity, Vector2 glowOffset) = isRepairing
                 ? GetRepairGlow(repairAnimationElapsed, breath)
-                : GetRestingGlow(isFoyer, isRepaired, isActive, breath);
+                : GetRestingGlow(isRepaired, isActive, breath);
             ApplySprite(glow, sprites, glowSource, drawPosition + glowOffset);
             glow.color = Color.White * glowOpacity;
 
             // A wall fixture must sort behind a farmer standing on the floor in front of it.
-            fixture.layerDepth = (placement.WorldPosition.Y + 8f) / 10000f;
-            glow.layerDepth = fixture.layerDepth + 0.000002f;
+            shell.layerDepth = (placement.WorldPosition.Y + 8f) / 10000f;
+            accents.layerDepth = shell.layerDepth + 0.000001f;
+            glow.layerDepth = shell.layerDepth + 0.000002f;
         }
 
         /// <summary>Resting-state glow: a dim socket ember when broken, a breathing crystal otherwise.</summary>
-        private static (Rectangle, float, Vector2) GetRestingGlow(bool isFoyer, bool isRepaired, bool isActive, float breath)
+        private static (Rectangle, float, Vector2) GetRestingGlow(bool isRepaired, bool isActive, float breath)
         {
-            if (isFoyer && !isRepaired)
-                return (SpriteSheet.FoyerBrokenGlow, 0.6f + breath * 0.25f, Vector2.Zero);
+            if (!isRepaired)
+                return (SpriteSheet.BrokenGlow, 0.6f + breath * 0.25f, Vector2.Zero);
 
-            Rectangle source = isFoyer
-                ? isActive ? SpriteSheet.FoyerGlowActive : SpriteSheet.FoyerGlowIdle
-                : isActive ? SpriteSheet.MineGlowActive : SpriteSheet.MineGlowIdle;
+            Rectangle source = isActive ? SpriteSheet.GlowActive : SpriteSheet.GlowIdle;
             float opacity = isActive ? 0.78f + breath * 0.22f : 0.5f + breath * 0.14f;
             return (source, opacity, Vector2.Zero);
         }
@@ -130,7 +115,7 @@ namespace QisFadingElevator
                     1 => 0.75f,
                     _ => 0.55f + breath * 0.2f
                 };
-                return (SpriteSheet.FoyerGlowIdle, opacity, Vector2.Zero);
+                return (SpriteSheet.GlowIdle, opacity, Vector2.Zero);
             }
 
             if (elapsed >= RepairSequence.SeamStart && elapsed < RepairSequence.SeamEnd)
@@ -153,11 +138,11 @@ namespace QisFadingElevator
             if (elapsed >= RepairSequence.FlareEnd)
             {
                 float settle = Math.Min(1f, (elapsed - RepairSequence.FlareEnd) / 20f);
-                return (SpriteSheet.FoyerGlowActive, 0.5f + settle * 0.28f + breath * 0.22f * settle, Vector2.Zero);
+                return (SpriteSheet.GlowActive, 0.5f + settle * 0.28f + breath * 0.22f * settle, Vector2.Zero);
             }
 
             // Between beats the broken socket ember barely holds on.
-            return (SpriteSheet.FoyerBrokenGlow, 0.5f + breath * 0.2f, Vector2.Zero);
+            return (SpriteSheet.BrokenGlow, 0.5f + breath * 0.2f, Vector2.Zero);
         }
 
         private static float FlashFade(int ticksIn)
@@ -219,8 +204,8 @@ namespace QisFadingElevator
         /// <summary>Remove our fixture sprites without touching any temporary sprites owned by the game or other mods.</summary>
         public static void RemoveSprite(GameLocation location)
         {
-            RemoveSpriteById(location, FixtureSpriteId);
-            RemoveSpriteById(location, ShroudSpriteId);
+            RemoveSpriteById(location, ShellSpriteId);
+            RemoveSpriteById(location, AccentsSpriteId);
             RemoveSpriteById(location, GlowSpriteId);
         }
 
@@ -307,8 +292,11 @@ namespace QisFadingElevator
 
             if (string.Equals(location.NameOrUniqueName, FoyerLocationName, StringComparison.OrdinalIgnoreCase))
             {
-                // Keep the fixture centered in the same two-tile foyer niche even though its art is slimmer.
-                placement = CreatePlacement(4, 2, allocationWidthInTiles: 2, wallColor: Color.White);
+                // Keep the fixture centered in the same two-tile foyer niche even though its art is
+                // slimmer. The foyer wall is sampled like any generated room, so recolor mods and
+                // the shell's wall-parity calibration apply here too.
+                Color foyerWall = ResolveWallColor(location, 4, 2, allocationWidthInTiles: 2);
+                placement = CreatePlacement(4, 2, allocationWidthInTiles: 2, wallColor: foyerWall);
                 return true;
             }
 
@@ -326,7 +314,7 @@ namespace QisFadingElevator
 
             // Prefer the right side on ties, matching the foyer and keeping placement visually predictable.
             int tileX = rightScore >= leftScore ? rightX : leftX;
-            Color wallColor = ResolveWallColor(location, tileX, topY);
+            Color wallColor = ResolveWallColor(location, tileX, topY, MineAllocationWidthInTiles);
             placement = CreatePlacement(tileX, topY, MineAllocationWidthInTiles, wallColor);
             return true;
         }
@@ -385,7 +373,7 @@ namespace QisFadingElevator
         }
 
         /// <summary>Sample the actual patched wall tiles behind the fixture into one raw wall color.</summary>
-        private static Color ResolveWallColor(GameLocation location, int tileX, int tileY)
+        private static Color ResolveWallColor(GameLocation location, int tileX, int tileY, int allocationWidthInTiles)
         {
             var buildings = location.Map.GetLayer("Buildings");
             var front = location.Map.GetLayer("Front");
@@ -395,19 +383,22 @@ namespace QisFadingElevator
             double blue = 0;
             int count = 0;
 
-            for (int y = tileY; y < tileY + AllocationHeightInTiles; y++)
+            for (int x = tileX; x < tileX + allocationWidthInTiles; x++)
             {
-                Tile? tile = buildings?.Tiles[tileX, y]
-                    ?? front?.Tiles[tileX, y]
-                    ?? back?.Tiles[tileX, y];
-                Color? sampled = SampleTilePalette(tile);
-                if (!sampled.HasValue)
-                    continue;
+                for (int y = tileY; y < tileY + AllocationHeightInTiles; y++)
+                {
+                    Tile? tile = buildings?.Tiles[x, y]
+                        ?? front?.Tiles[x, y]
+                        ?? back?.Tiles[x, y];
+                    Color? sampled = SampleTilePalette(tile);
+                    if (!sampled.HasValue)
+                        continue;
 
-                red += sampled.Value.R;
-                green += sampled.Value.G;
-                blue += sampled.Value.B;
-                count++;
+                    red += sampled.Value.R;
+                    green += sampled.Value.G;
+                    blue += sampled.Value.B;
+                    count++;
+                }
             }
 
             return count == 0
@@ -416,14 +407,15 @@ namespace QisFadingElevator
         }
 
         /// <summary>
-        /// Brighten a raw wall color so grey shroud pixels multiplied by it land near the wall's own
-        /// values instead of a darker copy, with a touch of saturation kept from the source.
+        /// Brighten the sampled wall color so the shell's near-white relief (midtone ~212) multiplied
+        /// by it lands on the wall's own median luminance. Calibrated against live screenshots:
+        /// 212/255 x 1.30 keeps the fixture at 0.8-0.95 of the wall's brightness in every room.
         /// </summary>
         private static Color CompensateForMultiply(Color wall)
         {
             double luma = wall.R * 0.2126 + wall.G * 0.7152 + wall.B * 0.0722;
             const double saturationRetention = 0.92;
-            const double neutralMaterialCompensation = 1.55;
+            const double neutralMaterialCompensation = 1.30;
             return new Color(
                 ToByte((luma + (wall.R - luma) * saturationRetention) * neutralMaterialCompensation),
                 ToByte((luma + (wall.G - luma) * saturationRetention) * neutralMaterialCompensation),
