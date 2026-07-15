@@ -141,13 +141,18 @@ namespace QisFadingElevator
             if (!ElevatorPrototype.TryGetCrownCenter(location, out Vector2 crown))
                 return;
 
+            // The 12px sprite's center must sit on the skull's crystal (+-5px), so the mote reads
+            // as shed by the machine, not floating beside it. initialPosition anchors the sine
+            // drift to the spawn point; unset, the game would swing the mote around the map origin.
             Rectangle source = Game1.random.Next(2) == 0 ? SpriteSheet.MoteA : SpriteSheet.MoteB;
+            Vector2 spawn = crown + new Vector2(Game1.random.Next(-11, 0), Game1.random.Next(-10, -1));
             location.TemporarySprites.Add(new TemporaryAnimatedSprite
             {
                 texture = sprites,
                 sourceRect = source,
                 sourceRectStartingPos = new Vector2(source.X, source.Y),
-                position = crown + new Vector2(Game1.random.Next(-14, 9), Game1.random.Next(0, 10)),
+                position = spawn,
+                initialPosition = spawn,
                 scale = 4f,
                 animationLength = 1,
                 interval = 999999f,
@@ -171,12 +176,14 @@ namespace QisFadingElevator
             for (int i = 0; i < 5; i++)
             {
                 Rectangle source = i % 2 == 0 ? SpriteSheet.MoteA : SpriteSheet.MoteB;
+                Vector2 spawn = crown + new Vector2((i - 2) * 9f - 6f, 18f + i % 3 * 26f);
                 location.TemporarySprites.Add(new TemporaryAnimatedSprite
                 {
                     texture = sprites,
                     sourceRect = source,
                     sourceRectStartingPos = new Vector2(source.X, source.Y),
-                    position = crown + new Vector2((i - 2) * 9f - 6f, 18f + i % 3 * 26f),
+                    position = spawn,
+                    initialPosition = spawn,
                     scale = 4f,
                     animationLength = 1,
                     interval = 999999f,
