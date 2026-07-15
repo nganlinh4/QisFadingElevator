@@ -38,7 +38,7 @@ namespace QisFadingElevator
             this.mod.Data.DeepestFloor = floor;
             this.mod.Data.FadeMinutes = 0;
             this.mod.Data.HourlyFadeRemainder = 0;
-            this.mod.Gauge.SetValues(this.mod.Data.Foothold, this.mod.Data.DeepestFloor);
+            this.mod.SyncGauge();
             this.mod.Gauge.Pulse();
             this.mod.Monitor.Log($"The old shaft now remembers floor {floor}.", LogLevel.Info);
         }

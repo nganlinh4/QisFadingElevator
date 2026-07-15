@@ -44,11 +44,15 @@ namespace QisFadingElevator
         /*********
         ** Public methods
         *********/
-        /// <summary>Set the current foothold and all-time record the gauge should reflect.</summary>
-        public void SetValues(double foothold, int record)
+        /// <summary>
+        /// Set what the gauge reflects. The fill and marker track the exact live foothold (including
+        /// fractional fade accruing in realtime); the number shows the whole floors the mechanics
+        /// still honor, so it only moves when the rounded floor is truly collected.
+        /// </summary>
+        public void SetValues(double exactFoothold, double mechanicalFoothold, int record)
         {
-            this.target = Math.Max(0, foothold);
-            this.foothold = Math.Max(0, (int)Math.Floor(this.target));
+            this.target = Math.Max(0, exactFoothold);
+            this.foothold = Math.Max(0, (int)Math.Floor(Math.Max(0, mechanicalFoothold)));
             this.record = Math.Max(0, record);
             if (!this.initialized)
             {
@@ -108,9 +112,9 @@ namespace QisFadingElevator
             float breath = (MathF.Sin(this.idlePhase) + 1f) * 0.5f;
             Color railTint = Color.Lerp(Color.White, QiGlow, 0.035f + breath * 0.055f);
 
-            // One cap, a genuinely repeated middle segment, and one bottom cap. When the player
-            // is standing at their full remembered depth, the anchor warms gold in quiet reward.
-            bool atRecord = this.record > 0 && this.displayed >= this.record - 0.01f;
+            // One cap, a genuinely repeated middle segment, and one bottom cap. When the mechanics
+            // still honor the full remembered depth, the anchor warms gold in quiet reward.
+            bool atRecord = this.record > 0 && this.foothold >= this.record;
             Color anchorTint = atRecord
                 ? Color.Lerp(railTint, new Color(255, 208, 120), 0.3f + breath * 0.25f)
                 : railTint;
@@ -131,9 +135,9 @@ namespace QisFadingElevator
             int channelX = x + 3 * Scale;
             int channelWidth = 4 * Scale;
 
-            // Tile the fill weave inside the channel; partial segments stay aligned to native pixels.
+            // Tile the fill weave inside the channel. The edge is deliberately unsnapped from the
+            // native grid: the fading memory must visibly bleed away screen-pixel by screen-pixel.
             int fillBottom = this.FloorToY(y, bodyHeight, this.displayed);
-            fillBottom = y + Math.Max(0, (fillBottom - y) / Scale * Scale);
             Color effectColor = this.damageEffect ? DamageGlow : QiGlow;
             Color restingFill = Color.Lerp(Color.White, QiGlow, 0.12f + breath * 0.12f);
             Color fillTint = Color.Lerp(restingFill, effectColor, this.flash * 0.8f);

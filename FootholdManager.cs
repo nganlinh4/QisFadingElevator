@@ -38,6 +38,22 @@ namespace QisFadingElevator
             return data.Foothold > this.config.MinFoothold && this.FadeRateFor(data.Foothold) > 0;
         }
 
+        /// <summary>
+        /// Where the memory truly stands right now: the stored foothold minus the fractional fade
+        /// debt already charged, minus this hour's bite accrued minute by minute. Continuous across
+        /// hourly pulses, so the gauge can bleed in realtime while whole floors keep their own event.
+        /// </summary>
+        public double PreviewExactFoothold(FootholdSaveData data, double dailyLuck)
+        {
+            if (data.Foothold <= this.config.MinFoothold)
+                return data.Foothold;
+
+            double rate = this.FadeRateFor(data.Foothold) / 100.0;
+            double luckFactor = Math.Clamp(1.0 - dailyLuck * this.config.LuckInfluence * 2.0, 0.5, 1.5);
+            double accruingBite = data.FadeMinutes / 60.0 * (data.Foothold * rate * luckFactor);
+            return Math.Max(this.config.MinFoothold, data.Foothold - data.HourlyFadeRemainder - accruingBite);
+        }
+
         /// <summary>Record that the player reached a Skull Cavern floor today.</summary>
         /// <returns>True if this was a new personal record.</returns>
         public bool RecordDive(FootholdSaveData data, int floor)

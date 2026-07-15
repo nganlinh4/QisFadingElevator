@@ -101,6 +101,18 @@ namespace QisFadingElevator
             this.Helper.WriteConfig(this.Config);
         }
 
+        /// <summary>
+        /// Push the live state into the gauge: the exact realtime foothold (with fade bleeding in
+        /// minute by minute) for the fill, and the mechanically honored floors for the number.
+        /// </summary>
+        internal void SyncGauge()
+        {
+            double exact = Context.IsWorldReady
+                ? this.Manager.PreviewExactFoothold(this.Data, Game1.player.DailyLuck)
+                : this.Data.Foothold;
+            this.Gauge.SetValues(exact, this.Data.Foothold, this.Data.DeepestFloor);
+        }
+
         /// <summary>Console-command hook: force the repair state and repaint the fixture.</summary>
         internal void SetRepairedForTesting(bool repaired)
         {
@@ -126,7 +138,7 @@ namespace QisFadingElevator
             this.lastRecordToastVariant = -1;
             this.StoryNotice.Clear();
             this.damageWatcher.Reset();
-            this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
+            this.SyncGauge();
         }
 
         private static void MigrateSaveData(FootholdSaveData data)
@@ -187,7 +199,7 @@ namespace QisFadingElevator
             this.damageWatcher.Observe();
             this.StoryNotice.Update();
             this.UpdateRepairAnimation();
-            this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
+            this.SyncGauge();
             this.Gauge.Update();
             if (this.Config.Enabled)
             {
@@ -293,7 +305,7 @@ namespace QisFadingElevator
             if (!applied)
                 return;
 
-            this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
+            this.SyncGauge();
             this.Gauge.PulseDecay(lostFloors, fromDamage: false);
         }
 
@@ -304,7 +316,7 @@ namespace QisFadingElevator
             if (!fade.Applied)
                 return fade;
 
-            this.Gauge.SetValues(this.Data.Foothold, this.Data.DeepestFloor);
+            this.SyncGauge();
             this.Gauge.PulseDecay(fade.LostFloors, fromDamage: true);
             return fade;
         }
