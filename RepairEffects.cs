@@ -132,6 +132,36 @@ namespace QisFadingElevator
             });
         }
 
+        /// <summary>
+        /// One faint mote drifting up from the skull's crystal while the awakened lift is near the
+        /// player. Called rarely; keeps the fixture alive without fighting the cave's darkness.
+        /// </summary>
+        public static void SpawnAmbientMote(GameLocation location, Texture2D sprites)
+        {
+            if (!ElevatorPrototype.TryGetCrownCenter(location, out Vector2 crown))
+                return;
+
+            Rectangle source = Game1.random.Next(2) == 0 ? SpriteSheet.MoteA : SpriteSheet.MoteB;
+            location.TemporarySprites.Add(new TemporaryAnimatedSprite
+            {
+                texture = sprites,
+                sourceRect = source,
+                sourceRectStartingPos = new Vector2(source.X, source.Y),
+                position = crown + new Vector2(Game1.random.Next(-14, 9), Game1.random.Next(0, 10)),
+                scale = 4f,
+                animationLength = 1,
+                interval = 999999f,
+                motion = new Vector2(0f, -0.28f),
+                acceleration = new Vector2(0f, -0.002f),
+                xPeriodic = true,
+                xPeriodicLoopTime = 1600f,
+                xPeriodicRange = 3f,
+                alpha = 0.55f,
+                alphaFade = 0.0065f,
+                drawAboveAlwaysFront = true
+            });
+        }
+
         /// <summary>A handful of violet motes drifting up the awakened seam, Junimo-hut style.</summary>
         private static void SpawnIgnitionMotes(GameLocation location, Texture2D sprites)
         {

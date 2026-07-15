@@ -250,14 +250,14 @@ namespace QisFadingElevator
             return bounds.Contains((int)absolutePixels.X, (int)absolutePixels.Y);
         }
 
-        /// <summary>World-pixel center of the crown dial, where ignition effects bloom.</summary>
+        /// <summary>World-pixel center of the skull's forehead crystal, where ignition effects bloom.</summary>
         public static bool TryGetCrownCenter(GameLocation? location, out Vector2 center)
         {
             center = Vector2.Zero;
             if (!TryGetPlacement(location, out ElevatorPlacement placement))
                 return false;
 
-            center = placement.WorldPosition + new Vector2(8.5f * Scale, 3.5f * Scale);
+            center = placement.WorldPosition + new Vector2(8.5f * Scale, 2f * Scale);
             return true;
         }
 

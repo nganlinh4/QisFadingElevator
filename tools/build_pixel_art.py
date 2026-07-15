@@ -5,10 +5,11 @@ row 1 the repair frames plus bloom/sparks/motes, row 2 the modular gauge. Exact 
 constants below, mirrored by SpriteSheet.cs.
 
 Color model (calibrated against live screenshots, 2026-07-15): the SHELL carries the machine's
-mass as a near-white warm-neutral relief (midtone ~212) and is multiplied at runtime by the
-sampled wall color x1.20, so its median luminance lands on the wall's own median in every room.
-The ACCENTS sprite holds only absolute darkness and identity pixels (interior openings, rivets,
-copper node) and is drawn untinted. Qi light lives on the separate glow sprites.
+mass as a near-white warm-neutral relief multiplied at runtime by the sampled wall color x1.30,
+so its median luminance lands on the wall's own median in every room. The ACCENTS sprite holds
+translucent warm-mauve interior darkness plus a few opaque identity pixels. Qi light lives on
+the separate glow sprites: a carved bone skull crowns the lift, its forehead crystal and eye
+sockets waking when the player is near.
 """
 from __future__ import annotations
 
@@ -16,71 +17,20 @@ from pathlib import Path
 
 from PIL import Image
 
+import gauge_frames
 import qfe_previews
-from pixel_kit import (
-    TRANSPARENT, RGBA, px, hline, vline, rect, with_alpha, crop, checker_preview,
+from pixel_kit import TRANSPARENT, RGBA, px, hline, vline, rect, with_alpha, crop, checker_preview
+from qfe_palette import (
+    N_GLEAM, N_LIGHT, N_MID, N_SOFT, N_SHADOW, N_DARK, DOOR_MID, DOOR_DARK,
+    PLATE_HI, PLATE_MID, PLATE_SHADOW, BRASS, BRASS_HI,
+    INTERIOR, RIVET, COPPER, COPPER_DARK, DEAD_SOCKET,
+    FLASH_WHITE, GOLD_GLEAM, CAVE_DUST, SPARK_WHITE, SPARK_BLUE,
+    QI_DARK, QI_PURPLE, QI_VIOLET, QI_LIGHT, QI_GLOW, QI_WHITE,
 )
 
 PROJECT = Path(__file__).resolve().parents[1]
 ASSETS = PROJECT / "assets"
 REFERENCES = PROJECT / "references"
-
-
-def grey(value: int) -> RGBA:
-    return (value, value, value, 255)
-
-
-def warm(value: int, ratio: tuple[float, float, float]) -> RGBA:
-    return (round(value * ratio[0]), round(value * ratio[1]), round(value * ratio[2]), 255)
-
-
-# Shell relief values (multiplied by wall tint x1.20 at runtime; 212 x 1.20 = wall parity).
-N_GLEAM = grey(244)
-N_LIGHT = grey(228)
-N_MID = grey(212)
-N_SOFT = grey(192)
-N_SHADOW = grey(170)
-N_DARK = grey(142)
-DOOR_MID = grey(202)
-DOOR_DARK = grey(182)
-# Bone dial plate: the palest fixture element in every room, like vanilla's pale elevator dial.
-BONE_RATIO = (1.0, 0.95, 0.86)
-PLATE_HI = warm(246, BONE_RATIO)
-PLATE_MID = warm(224, BONE_RATIO)
-PLATE_SHADOW = warm(194, BONE_RATIO)
-# Brass straps: a whisper warmer than the wall, never a saturated orange pop.
-BRASS_RATIO = (1.0, 0.92, 0.78)
-BRASS = warm(176, BRASS_RATIO)
-BRASS_HI = warm(236, BRASS_RATIO)
-# Accent darkness: warm mauve like vanilla's own shadow lines (skull door darks eyedrop to
-# ~(72,48,52)), applied translucently so the gap stays a darker sibling of each room's wall.
-INTERIOR = (58, 40, 42, 255)
-RIVET = (52, 38, 34, 255)
-COPPER = (196, 106, 56, 255)
-COPPER_DARK = (135, 66, 38, 255)
-DEAD_SOCKET = (52, 38, 28, 255)
-FLASH_WHITE = (255, 250, 226, 255)
-GOLD_GLEAM = (232, 170, 76, 255)
-CAVE_DUST = (132, 99, 46, 255)
-SPARK_WHITE = (240, 252, 255, 255)
-SPARK_BLUE = (138, 214, 255, 255)
-# Gauge sandstone + Qi set (HUD, fixed colors).
-DESERT_SHADOW = (116, 85, 56, 255)
-DESERT_MID = (151, 110, 71, 255)
-DESERT_LIGHT = (175, 128, 98, 255)
-SAND_LIGHT = (173, 158, 110, 255)
-SAND_PALE = (189, 164, 132, 255)
-BONE_SHADOW = (129, 104, 74, 255)
-CAVE_SHADOW = (78, 46, 43, 255)
-ABYSS = (24, 16, 32, 255)
-GOLD_DARK = (168, 110, 23, 255)
-GOLD = (183, 129, 58, 255)
-QI_DARK = (64, 19, 153, 255)
-QI_PURPLE = (106, 51, 255, 255)
-QI_VIOLET = (156, 41, 255, 255)
-QI_LIGHT = (127, 123, 255, 255)
-QI_GLOW = (220, 173, 255, 255)
-QI_WHITE = (255, 234, 255, 255)
 
 SHEET_SIZE = (176, 96)
 LIFT = (17, 32)
@@ -110,11 +60,16 @@ GAUGE_MARKER = (12, 64, 12, 5)
 GAUGE_ICON = (12, 70, 8, 8)
 GAUGE_FILL = (26, 64, 4, 2)
 GAUGE_EMBER = (32, 64, 3, 3)
+GAUGE_RECTS = {
+    "top": GAUGE_TOP, "middle": GAUGE_MIDDLE, "bottom": GAUGE_BOTTOM,
+    "marker": GAUGE_MARKER, "icon": GAUGE_ICON, "fill": GAUGE_FILL, "ember": GAUGE_EMBER,
+}
 
 
 def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
-    """The machine's wall-tracking mass: dial crown, shoulders, lintel, jambs, slatted doors,
-    straps, kick plates, threshold, and the dissolving rock collar. Mirrored around x=8."""
+    """The machine's wall-tracking mass: a carved bone skull crown, rock shoulders, lintel,
+    jambs, slatted doors with Qi-diamond inlays, brass straps, kick plates, and a threshold
+    that dissolves into the floor. Mirrored around x=8."""
     ox, oy = origin
 
     def p(x: int, y: int, color: RGBA) -> None:
@@ -127,22 +82,26 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
     def h(x1: int, x2: int, y: int, color: RGBA) -> None:
         hline(sheet, ox + x1, ox + x2, oy + y, color)
 
-    # Bone dial crown; the socket pixels stay plate-colored here and the accents darken them.
-    # The crest and rim ends are translucent so the crown melts into the wall behind it.
-    h(6, 10, 1, with_alpha(PLATE_SHADOW, 168))
-    m(5, 2, with_alpha(PLATE_SHADOW, 168)); h(6, 10, 2, PLATE_HI)
-    m(4, 3, with_alpha(PLATE_SHADOW, 168)); p(5, 3, PLATE_HI); p(6, 3, PLATE_HI)
-    h(7, 9, 3, PLATE_MID); p(10, 3, PLATE_MID); p(11, 3, PLATE_MID)
-    m(4, 4, PLATE_SHADOW); h(5, 11, 4, PLATE_MID)
-    m(4, 5, with_alpha(PLATE_SHADOW, 168)); h(5, 11, 5, PLATE_SHADOW)
+    # Skull crown carved from bone: a wide cranium dome, two-pixel eye sockets under a bone
+    # brow, inset cheeks, nose notch, and a small tooth row resting on the lintel jaw.
+    # The accents sprite darkens the sockets; the glow sprite wakes them.
+    m(7, 0, with_alpha(PLATE_SHADOW, 168)); p(8, 0, PLATE_SHADOW)
+    m(5, 1, with_alpha(PLATE_SHADOW, 168)); m(6, 1, PLATE_HI); m(7, 1, PLATE_HI); p(8, 1, PLATE_MID)
+    m(4, 2, with_alpha(PLATE_SHADOW, 168)); m(5, 2, PLATE_HI); m(6, 2, PLATE_HI)
+    m(7, 2, PLATE_HI); p(8, 2, PLATE_MID)
+    m(4, 3, PLATE_SHADOW); m(5, 3, PLATE_MID); m(6, 3, PLATE_MID); m(7, 3, PLATE_HI); p(8, 3, PLATE_HI)
+    m(5, 4, PLATE_SHADOW); m(6, 4, PLATE_MID); m(7, 4, PLATE_MID); p(8, 4, PLATE_MID)
+    for x in range(6, 11):
+        p(x, 5, PLATE_SHADOW if x % 2 == 0 else PLATE_MID)
+    m(6, 5, with_alpha(PLATE_SHADOW, 168))
 
     # Carved rock shoulders hugging the crown.
     m(3, 3, with_alpha(N_SOFT, 168))
     m(2, 4, with_alpha(N_SOFT, 112)); m(3, 4, N_SOFT)
     m(1, 5, with_alpha(N_SOFT, 64)); m(2, 5, N_SOFT); m(3, 5, N_SHADOW)
 
-    # Lintel beam with a lighter inset; the dark underside lives on the accents sprite.
-    h(3, 13, 6, N_SHADOW); h(5, 11, 6, N_MID)
+    # Lintel beam with a lighter inset and a single carved descent chevron.
+    h(3, 13, 6, N_SHADOW); h(5, 11, 6, N_MID); p(8, 6, N_SHADOW)
     h(3, 13, 7, N_DARK)
 
     # Jambs: lit left face, shaded right face; the outermost columns are translucent so the
@@ -160,8 +119,14 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
     for y in range(9, 26):
         p(4, y, DOOR_DARK); p(5, y, DOOR_MID); p(6, y, DOOR_DARK); p(7, y, DOOR_MID)
         p(9, y, DOOR_MID); p(10, y, DOOR_DARK); p(11, y, DOOR_MID); p(12, y, DOOR_DARK)
-    for x, y in ((5, 10), (11, 15), (7, 17), (9, 11)):
+    for x, y in ((5, 10), (9, 11), (7, 20), (11, 10)):
         p(x, y, N_LIGHT)
+
+    # Qi-diamond inlays recessed into each leaf; their centers light with the awakened seam.
+    for cx in (5, 11):
+        p(cx, 15, N_SHADOW); p(cx - 1, 16, N_SHADOW); p(cx + 1, 16, N_MID)
+        p(cx, 17, N_MID); p(cx, 16, DOOR_DARK)
+
     for y in (13, 19):
         h(4, 7, y, BRASS); h(9, 12, y, BRASS)
         p(4, y, BRASS_HI); p(9, y, BRASS_HI)
@@ -179,7 +144,7 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
     h(5, 11, 30, with_alpha(N_DARK, 168))
     m(1, 28, with_alpha(N_SOFT, 168)); m(0, 28, with_alpha(N_SOFT, 64))
     m(2, 29, with_alpha(N_SHADOW, 112))
-    m(4, 30, N_SHADOW); m(3, 30, with_alpha(N_SOFT, 112))
+    m(4, 30, N_SHADOW); m(3, 30, with_alpha(N_SOFT, 112)); m(2, 30, with_alpha(N_SOFT, 64))
     m(5, 31, with_alpha(N_SHADOW, 64)); m(7, 31, with_alpha(N_SOFT, 64))
 
     # Rock bites over the jamb edges tie the silhouette into the patched wall.
@@ -192,7 +157,7 @@ def draw_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
 def draw_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
     """Translucent interior darkness (the wall shows through, so contrast scales with the room),
-    plus the few opaque identity pixels: socket void, rivets, copper node."""
+    the skull's sockets, and the few opaque identity pixels: rivets and the copper node."""
     ox, oy = origin
 
     def p(x: int, y: int, color: RGBA) -> None:
@@ -203,9 +168,9 @@ def draw_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
     soft = with_alpha(INTERIOR, 112)
     deep = with_alpha(INTERIOR, 168)
-    p(8, 2, deep)
-    h(7, 9, 3, deep)
-    p(8, 4, deep)
+    p(8, 1, deep); p(8, 2, soft)
+    p(5, 3, deep); p(6, 3, deep); p(10, 3, deep); p(11, 3, deep)
+    p(8, 4, soft)
     h(4, 12, 7, soft)
     h(4, 12, 8, soft)
     vline(sheet, ox + 8, oy + 9, oy + 25, soft)
@@ -218,8 +183,8 @@ def draw_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
 
 def draw_broken_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
-    """Copy the shell, then break it: a missing dial chunk, a sheared plank catching light,
-    and rubble chips at the threshold."""
+    """Copy the shell, then break it: the skull's right brow is gone, a plank has sheared,
+    a strap dangles, and rubble chips rest at the threshold."""
     ox, oy = origin
     sx, sy = LIFT_SHELL
     sheet.paste(sheet.crop((sx, sy, sx + LIFT[0], sy + LIFT[1])), (ox, oy))
@@ -229,7 +194,7 @@ def draw_broken_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
     p(9, 1, TRANSPARENT); p(10, 1, TRANSPARENT)
     p(10, 2, TRANSPARENT); p(11, 2, TRANSPARENT)
-    p(9, 2, PLATE_SHADOW); p(11, 3, PLATE_SHADOW); p(12, 3, PLATE_SHADOW)
+    p(9, 2, PLATE_SHADOW); p(11, 3, PLATE_SHADOW); p(10, 3, PLATE_SHADOW)
     p(4, 15, N_LIGHT); p(5, 16, N_SOFT); p(6, 17, N_SHADOW)
     p(4, 13, N_SHADOW); p(5, 13, N_SOFT)
     p(6, 19, N_SHADOW); p(7, 19, N_SOFT)
@@ -239,7 +204,8 @@ def draw_broken_shell(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
 
 def draw_broken_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
-    """Broken interior darkness: crack path, sheared gap, sprung right leaf, dead power node."""
+    """Broken interior darkness: dead socket, one hollow eye, crack path, sheared gap,
+    sprung right leaf, dead power node."""
     ox, oy = origin
     ax, ay = LIFT_ACCENTS
     sheet.paste(sheet.crop((ax, ay, ax + LIFT[0], ay + LIFT[1])), (ox, oy))
@@ -249,7 +215,9 @@ def draw_broken_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
     deep = with_alpha(INTERIOR, 168)
     soft = with_alpha(INTERIOR, 112)
-    p(8, 2, deep); p(7, 5, soft)
+    p(10, 3, TRANSPARENT); p(11, 3, TRANSPARENT)
+    p(9, 3, soft)
+    p(7, 5, soft)
     p(6, 6, deep); p(6, 9, deep); p(5, 10, deep); p(6, 11, soft)
     p(4, 14, deep); p(5, 15, deep); p(6, 16, deep); p(7, 17, deep)
     for y in range(9, 26):
@@ -259,24 +227,33 @@ def draw_broken_accents(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
 
 def draw_glow(sheet: Image.Image, origin: tuple[int, int], active: bool) -> None:
-    """Only untinted Qi light: the crown crystal, and when active a living seam plus floor spill."""
+    """Only untinted Qi light. Idle: a dim forehead ember and the faintest eye hint. Active:
+    the crystal wakes, the eye sockets glow, the seam and door diamonds light, and a soft
+    violet pool spills onto the floor."""
     ox, oy = origin
 
     def p(x: int, y: int, color: RGBA) -> None:
         px(sheet, ox + x, oy + y, color)
 
+    def e(x: int, y: int, color: RGBA) -> None:
+        p(x, y, color)
+        p(16 - x, y, color)
+
     if not active:
-        p(8, 2, with_alpha(QI_DARK, 168))
-        p(7, 3, with_alpha(QI_DARK, 112)); p(8, 3, QI_PURPLE); p(9, 3, with_alpha(QI_DARK, 112))
-        p(8, 4, with_alpha(QI_DARK, 168))
+        p(8, 0, with_alpha(QI_DARK, 64))
+        p(8, 1, with_alpha(QI_PURPLE, 168))
+        p(8, 2, with_alpha(QI_DARK, 112))
+        e(6, 3, with_alpha(QI_DARK, 64))
         return
 
-    p(8, 1, with_alpha(QI_GLOW, 112))
-    p(7, 2, with_alpha(QI_PURPLE, 112)); p(8, 2, QI_LIGHT); p(9, 2, with_alpha(QI_PURPLE, 112))
-    p(7, 3, QI_PURPLE); p(8, 3, QI_WHITE); p(9, 3, QI_VIOLET)
-    p(7, 4, with_alpha(QI_PURPLE, 112)); p(8, 4, QI_VIOLET); p(9, 4, with_alpha(QI_PURPLE, 112))
-    p(8, 5, with_alpha(QI_GLOW, 112))
-    p(5, 3, with_alpha(QI_GLOW, 64)); p(11, 3, with_alpha(QI_GLOW, 64))
+    p(8, 0, with_alpha(QI_GLOW, 112))
+    p(8, 1, QI_WHITE)
+    p(8, 2, QI_LIGHT)
+    e(7, 1, with_alpha(QI_PURPLE, 112))
+    e(7, 0, with_alpha(QI_GLOW, 64))
+    e(6, 3, with_alpha(QI_VIOLET, 168))
+    e(5, 3, with_alpha(QI_PURPLE, 112))
+    e(4, 2, with_alpha(QI_GLOW, 64))
     for y in range(9, 26):
         if y in (13, 19):
             p(8, y, QI_LIGHT)
@@ -284,11 +261,17 @@ def draw_glow(sheet: Image.Image, origin: tuple[int, int], active: bool) -> None
             p(8, y, with_alpha(QI_PURPLE, 168))
         else:
             p(8, y, with_alpha(QI_PURPLE, 112) if y % 2 else with_alpha(QI_DARK, 112))
-    p(7, 29, with_alpha(QI_DARK, 64)); p(8, 29, with_alpha(QI_PURPLE, 112)); p(9, 29, with_alpha(QI_DARK, 64))
+    e(5, 16, QI_VIOLET)
+    e(5, 17, with_alpha(QI_PURPLE, 112))
+    e(7, 28, with_alpha(QI_PURPLE, 112)); p(8, 28, with_alpha(QI_GLOW, 168))
+    e(5, 29, with_alpha(QI_DARK, 28)); e(6, 29, with_alpha(QI_PURPLE, 64))
+    e(7, 29, with_alpha(QI_GLOW, 112)); p(8, 29, with_alpha(QI_GLOW, 168))
+    e(6, 30, with_alpha(QI_DARK, 28)); e(7, 30, with_alpha(QI_PURPLE, 64)); p(8, 30, with_alpha(QI_PURPLE, 112))
+    e(7, 31, with_alpha(QI_DARK, 16)); p(8, 31, with_alpha(QI_PURPLE, 28))
 
 
 def draw_broken_glow(sheet: Image.Image, origin: tuple[int, int]) -> None:
-    px(sheet, origin[0] + 8, origin[1] + 3, with_alpha(QI_DARK, 112))
+    px(sheet, origin[0] + 8, origin[1] + 1, with_alpha(QI_DARK, 112))
 
 
 def draw_flash(sheet: Image.Image, origin: tuple[int, int], variant: int) -> None:
@@ -327,7 +310,7 @@ def draw_seam(sheet: Image.Image, origin: tuple[int, int]) -> None:
     def p(x: int, y: int, color: RGBA) -> None:
         px(sheet, ox + x, oy + y, color)
 
-    p(8, 2, QI_WHITE); p(8, 3, QI_GLOW); p(8, 4, QI_VIOLET)
+    p(8, 1, QI_GLOW); p(8, 2, QI_WHITE); p(8, 3, QI_GLOW); p(8, 4, QI_VIOLET)
     p(8, 5, QI_LIGHT); p(8, 6, QI_VIOLET); p(8, 7, with_alpha(QI_PURPLE, 168)); p(8, 8, QI_VIOLET)
     for y in range(9, 27):
         if y in (13, 19):
@@ -344,28 +327,27 @@ def draw_seam(sheet: Image.Image, origin: tuple[int, int]) -> None:
 
 
 def draw_flare(sheet: Image.Image, origin: tuple[int, int], big: bool) -> None:
+    """Crown ignition flares centered on the skull's forehead crystal."""
     ox, oy = origin
 
     def p(x: int, y: int, color: RGBA) -> None:
         px(sheet, ox + x, oy + y, color)
 
     if not big:
-        p(8, 1, with_alpha(QI_GLOW, 168))
+        p(8, 0, QI_GLOW)
+        p(7, 0, with_alpha(QI_VIOLET, 168)); p(9, 0, with_alpha(QI_VIOLET, 168))
+        p(7, 1, QI_GLOW); p(8, 1, QI_WHITE); p(9, 1, QI_GLOW)
         p(7, 2, QI_VIOLET); p(8, 2, QI_GLOW); p(9, 2, QI_VIOLET)
-        p(7, 3, QI_GLOW); p(8, 3, QI_WHITE); p(9, 3, QI_GLOW)
-        p(7, 4, QI_VIOLET); p(8, 4, QI_GLOW); p(9, 4, QI_VIOLET)
-        p(8, 5, with_alpha(QI_GLOW, 168))
+        p(8, 3, with_alpha(QI_GLOW, 168))
         return
-    p(8, 3, QI_WHITE)
-    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        p(8 + dx, 3 + dy, QI_WHITE if dy else QI_GLOW)
+    p(8, 1, QI_WHITE)
+    p(8, 0, QI_WHITE); p(8, 2, QI_WHITE); p(7, 1, QI_GLOW); p(9, 1, QI_GLOW)
     for dx, dy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
-        p(8 + dx, 3 + dy, QI_GLOW)
-    p(8, 0, with_alpha(QI_GLOW, 168)); p(8, 6, with_alpha(QI_GLOW, 168))
-    p(5, 3, with_alpha(QI_GLOW, 168)); p(11, 3, with_alpha(QI_GLOW, 168))
-    p(4, 3, with_alpha(QI_GLOW, 64)); p(12, 3, with_alpha(QI_GLOW, 64))
-    p(6, 1, with_alpha(QI_GLOW, 112)); p(10, 1, with_alpha(QI_GLOW, 112))
-    p(6, 5, with_alpha(QI_GLOW, 112)); p(10, 5, with_alpha(QI_GLOW, 112))
+        p(8 + dx, 1 + dy, QI_GLOW)
+    p(8, 4, with_alpha(QI_GLOW, 168))
+    p(5, 1, with_alpha(QI_GLOW, 168)); p(11, 1, with_alpha(QI_GLOW, 168))
+    p(4, 1, with_alpha(QI_GLOW, 64)); p(12, 1, with_alpha(QI_GLOW, 64))
+    p(6, 3, with_alpha(QI_GLOW, 112)); p(10, 3, with_alpha(QI_GLOW, 112))
 
 
 def draw_bloom(sheet: Image.Image) -> None:
@@ -410,90 +392,6 @@ def draw_sparks_and_motes(sheet: Image.Image) -> None:
         px(sheet, ox + 1 + dx, oy + 1 + dy, with_alpha(QI_PURPLE, 64))
 
 
-def gauge_rail_row() -> list[RGBA]:
-    edge = with_alpha(DESERT_LIGHT, 64)
-    stone = with_alpha(DESERT_MID, 168)
-    return [edge, stone, DESERT_SHADOW, ABYSS, ABYSS, ABYSS, ABYSS, DESERT_SHADOW, stone, edge]
-
-
-def draw_gauge(sheet: Image.Image) -> None:
-    # Top cap: crystal finial on a bone bracket, opening into the channel.
-    ox, oy = GAUGE_TOP[:2]
-    px(sheet, ox + 4, oy, QI_VIOLET); px(sheet, ox + 5, oy, QI_DARK)
-    px(sheet, ox + 3, oy + 1, QI_DARK); px(sheet, ox + 4, oy + 1, QI_GLOW)
-    px(sheet, ox + 5, oy + 1, QI_PURPLE); px(sheet, ox + 6, oy + 1, QI_DARK)
-    hline(sheet, ox + 2, ox + 7, oy + 2, SAND_PALE)
-    px(sheet, ox + 2, oy + 2, with_alpha(BONE_SHADOW, 168)); px(sheet, ox + 7, oy + 2, with_alpha(BONE_SHADOW, 168))
-    hline(sheet, ox + 1, ox + 8, oy + 3, DESERT_MID)
-    px(sheet, ox + 1, oy + 3, with_alpha(DESERT_MID, 168)); px(sheet, ox + 8, oy + 3, with_alpha(DESERT_MID, 168))
-    px(sheet, ox + 2, oy + 3, SAND_LIGHT)
-    for x, color in enumerate(gauge_rail_row()):
-        px(sheet, ox + x, oy + 4, color)
-
-    # Middle: two identical rows so the body tiles seamlessly.
-    ox, oy = GAUGE_MIDDLE[:2]
-    for y in range(2):
-        for x, color in enumerate(gauge_rail_row()):
-            px(sheet, ox + x, oy + y, color)
-
-    # Bottom cap: channel mouth, then a carved anchor.
-    ox, oy = GAUGE_BOTTOM[:2]
-    for x, color in enumerate(gauge_rail_row()):
-        px(sheet, ox + x, oy, color)
-    hline(sheet, ox + 1, ox + 8, oy + 1, DESERT_SHADOW)
-    px(sheet, ox + 1, oy + 1, with_alpha(DESERT_SHADOW, 168)); px(sheet, ox + 8, oy + 1, with_alpha(DESERT_SHADOW, 168))
-    hline(sheet, ox + 2, ox + 7, oy + 2, DESERT_MID)
-    px(sheet, ox + 2, oy + 2, with_alpha(DESERT_MID, 168))
-    px(sheet, ox + 7, oy + 2, SAND_LIGHT)
-    hline(sheet, ox + 3, ox + 6, oy + 3, CAVE_SHADOW)
-    px(sheet, ox + 4, oy + 4, with_alpha(CAVE_SHADOW, 112)); px(sheet, ox + 5, oy + 4, with_alpha(CAVE_SHADOW, 112))
-
-    # Marker: a bronze clamp gripping the rail, with a lit Qi gem over the channel.
-    ox, oy = GAUGE_MARKER[:2]
-    hline(sheet, ox + 3, ox + 8, oy, with_alpha(GOLD_DARK, 168))
-    hline(sheet, ox + 1, ox + 10, oy + 1, GOLD_DARK)
-    px(sheet, ox + 1, oy + 1, with_alpha(GOLD_DARK, 168)); px(sheet, ox + 10, oy + 1, with_alpha(GOLD_DARK, 168))
-    px(sheet, ox + 2, oy + 1, GOLD)
-    hline(sheet, ox, ox + 11, oy + 2, GOLD_DARK)
-    px(sheet, ox, oy + 2, with_alpha(GOLD_DARK, 112)); px(sheet, ox + 11, oy + 2, with_alpha(GOLD_DARK, 112))
-    px(sheet, ox + 1, oy + 2, GOLD)
-    px(sheet, ox + 5, oy + 2, QI_PURPLE); px(sheet, ox + 6, oy + 2, QI_GLOW)
-    hline(sheet, ox + 1, ox + 10, oy + 3, CAVE_SHADOW)
-    px(sheet, ox + 1, oy + 3, with_alpha(CAVE_SHADOW, 168)); px(sheet, ox + 10, oy + 3, with_alpha(CAVE_SHADOW, 168))
-    hline(sheet, ox + 3, ox + 8, oy + 4, with_alpha(CAVE_SHADOW, 168))
-
-    # Icon: a tiny lift glyph naming the instrument, its frame translucent like the rail edges.
-    ox, oy = GAUGE_ICON[:2]
-    px(sheet, ox + 3, oy, QI_PURPLE); px(sheet, ox + 4, oy, QI_DARK)
-    hline(sheet, ox + 2, ox + 5, oy + 1, SAND_PALE)
-    hline(sheet, ox + 1, ox + 6, oy + 2, DESERT_SHADOW)
-    px(sheet, ox + 1, oy + 2, with_alpha(DESERT_SHADOW, 168)); px(sheet, ox + 6, oy + 2, with_alpha(DESERT_SHADOW, 168))
-    for y in range(3, 7):
-        px(sheet, ox + 1, oy + y, with_alpha(DESERT_SHADOW, 168))
-        px(sheet, ox + 2, oy + y, DESERT_MID)
-        px(sheet, ox + 3, oy + y, ABYSS)
-        px(sheet, ox + 4, oy + y, DESERT_MID)
-        px(sheet, ox + 5, oy + y, DESERT_MID)
-        px(sheet, ox + 6, oy + y, with_alpha(DESERT_SHADOW, 168))
-    px(sheet, ox + 2, oy + 4, GOLD_DARK); px(sheet, ox + 4, oy + 4, GOLD_DARK)
-    hline(sheet, ox + 1, ox + 6, oy + 7, DESERT_SHADOW)
-    px(sheet, ox + 1, oy + 7, with_alpha(DESERT_SHADOW, 168)); px(sheet, ox + 6, oy + 7, with_alpha(DESERT_SHADOW, 168))
-
-    # Fill: a 4x2 energy weave tiled inside the channel.
-    ox, oy = GAUGE_FILL[:2]
-    px(sheet, ox, oy, with_alpha(QI_DARK, 168)); px(sheet, ox + 1, oy, QI_VIOLET)
-    px(sheet, ox + 2, oy, QI_GLOW); px(sheet, ox + 3, oy, with_alpha(QI_PURPLE, 168))
-    px(sheet, ox, oy + 1, with_alpha(QI_PURPLE, 168)); px(sheet, ox + 1, oy + 1, QI_PURPLE)
-    px(sheet, ox + 2, oy + 1, QI_VIOLET); px(sheet, ox + 3, oy + 1, with_alpha(QI_DARK, 168))
-
-    # Ember: a falling chip for loss feedback.
-    ox, oy = GAUGE_EMBER[:2]
-    px(sheet, ox + 1, oy, QI_GLOW)
-    px(sheet, ox, oy + 1, with_alpha(QI_PURPLE, 112)); px(sheet, ox + 1, oy + 1, QI_VIOLET)
-    px(sheet, ox + 2, oy + 1, with_alpha(QI_PURPLE, 112))
-    px(sheet, ox + 1, oy + 2, with_alpha(QI_DARK, 112))
-
-
 def validate(sheet: Image.Image) -> None:
     assert sheet.size == SHEET_SIZE and sheet.mode == "RGBA"
 
@@ -525,14 +423,21 @@ def validate(sheet: Image.Image) -> None:
         pixel = accents.getpixel((8, y))
         assert pixel[:3] == INTERIOR[:3] and 0 < pixel[3] < 255, f"seam wrong at y={y}: {pixel}"
 
-    assert crop(sheet, GLOW_IDLE).getbbox() == (7, 2, 10, 5)
-    box = crop(sheet, GLOW_ACTIVE).getbbox()
-    assert box is not None and box[1] <= 2 and box[3] >= 29, box
-    assert crop(sheet, BROKEN_GLOW).getbbox() == (8, 3, 9, 4)
+    # Skull sockets: forehead + both eyes present on the accents, lit on the active glow.
+    for x, y in ((8, 1), (5, 3), (6, 3), (10, 3), (11, 3)):
+        assert accents.getpixel((x, y))[3] > 0, f"socket missing at {(x, y)}"
+    active = crop(sheet, GLOW_ACTIVE)
+    for x, y in ((8, 1), (6, 3), (10, 3), (5, 16), (11, 16)):
+        assert active.getpixel((x, y))[3] > 0, f"active glow missing at {(x, y)}"
+    box = active.getbbox()
+    assert box is not None and box[1] == 0 and box[3] >= 31, box
+
+    assert crop(sheet, GLOW_IDLE).getbbox() == (6, 0, 11, 4)
+    assert crop(sheet, BROKEN_GLOW).getbbox() == (8, 1, 9, 2)
     assert list(crop(sheet, BROKEN_SHELL).getdata()) != list(crop(sheet, LIFT_SHELL).getdata())
 
     seam = crop(sheet, SEAM)
-    for y in range(2, 28):
+    for y in range(1, 28):
         assert seam.getpixel((8, y))[3] > 0, f"seam column gap at y={y}"
 
     middle = crop(sheet, GAUGE_MIDDLE)
@@ -560,7 +465,7 @@ def main() -> None:
     draw_flare(sheet, FLARE_B, big=True)
     draw_bloom(sheet)
     draw_sparks_and_motes(sheet)
-    draw_gauge(sheet)
+    gauge_frames.draw_gauge(sheet, GAUGE_RECTS)
     validate(sheet)
 
     sheet.save(ASSETS / "qfe-sprites.png", optimize=True)
@@ -575,11 +480,7 @@ def main() -> None:
         (LIFT_SHELL, LIFT_ACCENTS, FLARE_B), (LIFT_SHELL, LIFT_ACCENTS, GLOW_ACTIVE),
     ]
     qfe_previews.compose_repair_sequence(sheet, REFERENCES, repair_states).save(REFERENCES / "qfe-repair-sequence-4x.png")
-    gauge_rects = {
-        "top": GAUGE_TOP, "middle": GAUGE_MIDDLE, "bottom": GAUGE_BOTTOM,
-        "marker": GAUGE_MARKER, "icon": GAUGE_ICON, "fill": GAUGE_FILL,
-    }
-    qfe_previews.compose_gauge(sheet, gauge_rects).save(REFERENCES / "qfe-gauge-preview-4x.png")
+    qfe_previews.compose_gauge(sheet, GAUGE_RECTS).save(REFERENCES / "qfe-gauge-preview-4x.png")
     print("Wrote assets/qfe-sprites.png (176x96) and refreshed previews.")
 
 

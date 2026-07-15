@@ -195,6 +195,16 @@ namespace QisFadingElevator
                     ? RepairSequence.TotalTicks - this.repairAnimationTicksRemaining
                     : -1;
                 ElevatorPrototype.EnsureSprite(Game1.currentLocation, this.Sprites, this.Data.IsRepaired, repairElapsed);
+
+                // The awakened machine sheds a rare mote while the player stands close.
+                if (this.Data.IsRepaired
+                    && this.repairAnimationTicksRemaining == 0
+                    && !Game1.eventUp
+                    && ElevatorPrototype.IsPlayerInRange()
+                    && Game1.random.NextDouble() < 0.0045)
+                {
+                    RepairEffects.SpawnAmbientMote(Game1.currentLocation, this.Sprites);
+                }
             }
             else
                 ElevatorPrototype.RemoveSprite(Game1.currentLocation);

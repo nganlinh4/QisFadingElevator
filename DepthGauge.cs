@@ -108,11 +108,16 @@ namespace QisFadingElevator
             float breath = (MathF.Sin(this.idlePhase) + 1f) * 0.5f;
             Color railTint = Color.Lerp(Color.White, QiGlow, 0.035f + breath * 0.055f);
 
-            // One cap, a genuinely repeated middle segment, and one bottom cap.
+            // One cap, a genuinely repeated middle segment, and one bottom cap. When the player
+            // is standing at their full remembered depth, the anchor warms gold in quiet reward.
+            bool atRecord = this.record > 0 && this.displayed >= this.record - 0.01f;
+            Color anchorTint = atRecord
+                ? Color.Lerp(railTint, new Color(255, 208, 120), 0.3f + breath * 0.25f)
+                : railTint;
             b.Draw(this.sprites, new Rectangle(x, y - capHeight, capWidth, capHeight), SpriteSheet.GaugeTop, railTint);
             for (int i = 0; i < SegmentCount; i++)
                 b.Draw(this.sprites, new Rectangle(x, y + i * segmentHeight, capWidth, segmentHeight), SpriteSheet.GaugeMiddle, railTint);
-            b.Draw(this.sprites, new Rectangle(x, y + bodyHeight, capWidth, capHeight), SpriteSheet.GaugeBottom, railTint);
+            b.Draw(this.sprites, new Rectangle(x, y + bodyHeight, capWidth, capHeight), SpriteSheet.GaugeBottom, anchorTint);
 
             // Calibration notches etched into the stone rather than protruding from it.
             Color etch = EtchShadow * (0.5f + breath * 0.1f);
@@ -132,12 +137,18 @@ namespace QisFadingElevator
             Color effectColor = this.damageEffect ? DamageGlow : QiGlow;
             Color restingFill = Color.Lerp(Color.White, QiGlow, 0.12f + breath * 0.12f);
             Color fillTint = Color.Lerp(restingFill, effectColor, this.flash * 0.8f);
+            int segmentIndex = 0;
             for (int fillY = y; fillY < fillBottom; fillY += segmentHeight)
             {
                 int drawHeight = Math.Min(segmentHeight, fillBottom - fillY);
                 int sourceHeight = Math.Max(1, drawHeight / Scale);
                 Rectangle fillSource = new(SpriteSheet.GaugeFill.X, SpriteSheet.GaugeFill.Y, SpriteSheet.GaugeFill.Width, sourceHeight);
-                b.Draw(this.sprites, new Rectangle(channelX, fillY, channelWidth, drawHeight), fillSource, fillTint);
+
+                // A slow luminous knot travels down the weave, so the retained memory reads alive.
+                float knot = MathF.Max(0f, MathF.Sin(this.idlePhase * 1.6f - segmentIndex * 0.55f));
+                Color segmentTint = Color.Lerp(fillTint, Color.White, knot * knot * 0.22f);
+                b.Draw(this.sprites, new Rectangle(channelX, fillY, channelWidth, drawHeight), fillSource, segmentTint);
+                segmentIndex++;
             }
 
             // Below the live fill, the channel keeps a faint violet residue: the memory that faded.
