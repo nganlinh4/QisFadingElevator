@@ -6,7 +6,9 @@
   "UniqueID": "tteokl.QisFadingElevator",
   "EntryDll": "QisFadingElevator.dll",
   "MinimumApiVersion": "4.0.0",
-  "UpdateKeys": [],
+  "UpdateKeys": [
+    "Nexus:49041"
+  ],
   "Dependencies": [
     {
       "UniqueID": "spacechase0.GenericModConfigMenu",

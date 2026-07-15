@@ -13,6 +13,11 @@ obj/
 config.json
 *.log
 *.zip
+output/
+
+# Local art-analysis inputs and generated previews
+# These can contain extracted vanilla game assets and gameplay screenshots.
+references/
 
 # OS metadata
 .DS_Store
