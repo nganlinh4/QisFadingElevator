@@ -5,6 +5,7 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Locations;
+using StardewValley.Tools;
 
 namespace QisFadingElevator
 {
@@ -47,6 +48,7 @@ namespace QisFadingElevator
 
         /// <summary>Transient awakening sequence; repaired state is persisted before this begins.</summary>
         private int repairAnimationTicksRemaining;
+        private Pickaxe? repairPickaxe;
         private int lastRecordToastVariant = -1;
 
         /*********
@@ -116,6 +118,7 @@ namespace QisFadingElevator
         /// <summary>Console-command hook: force the repair state and repaint the fixture.</summary>
         internal void SetRepairedForTesting(bool repaired)
         {
+            this.EndRepairSwing(Game1.player);
             this.Data.IsRepaired = repaired;
             this.Data.DataVersion = CurrentDataVersion;
             this.repairAnimationTicksRemaining = 0;
@@ -134,6 +137,7 @@ namespace QisFadingElevator
             MigrateSaveData(this.Data);
             this.ApplyPendingSleepFade();
             this.pendingRecordFloor = 0;
+            this.EndRepairSwing(Game1.player);
             this.repairAnimationTicksRemaining = 0;
             this.lastRecordToastVariant = -1;
             this.StoryNotice.Clear();
@@ -464,14 +468,62 @@ namespace QisFadingElevator
                 return;
 
             int elapsed = RepairSequence.TotalTicks - this.repairAnimationTicksRemaining;
+            if (RepairSequence.IsSwingStart(elapsed))
+                this.StartRepairSwing(Game1.player);
+
             RepairEffects.FireBeats(Game1.currentLocation, elapsed, this.Sprites);
 
             this.repairAnimationTicksRemaining--;
             if (this.repairAnimationTicksRemaining == 0)
             {
+                this.EndRepairSwing(Game1.player);
                 this.Gauge.Pulse();
                 this.Toast("toast.repair-complete");
             }
+        }
+
+        /// <summary>
+        /// Play the upward vanilla pickaxe pose without invoking the tool itself. The temporary
+        /// tool makes the pickaxe visible but never replaces the player's selected inventory slot.
+        /// </summary>
+        private void StartRepairSwing(Farmer who)
+        {
+            this.EndRepairSwing(who);
+
+            this.repairPickaxe = new Pickaxe();
+            this.repairPickaxe.Update(0, 0, who);
+            who.TemporaryItem = this.repairPickaxe;
+            who.UsingTool = true;
+            who.faceDirection(0);
+            who.FarmerSprite.CurrentToolIndex = this.repairPickaxe.CurrentParentTileIndex;
+
+            // These are Stardew's upward pickaxe poses with all tool-action callbacks removed.
+            // That preserves the vanilla motion without striking tiles, spending stamina, or
+            // damaging monsters during what is only a repair cutscene.
+            who.FarmerSprite.animateOnce(
+                new[]
+                {
+                    new FarmerSprite.AnimationFrame(36, 100),
+                    new FarmerSprite.AnimationFrame(37, 40),
+                    new FarmerSprite.AnimationFrame(38, 40),
+                    new FarmerSprite.AnimationFrame(63, 220),
+                    new FarmerSprite.AnimationFrame(62, 75)
+                },
+                this.EndRepairSwing
+            );
+        }
+
+        /// <summary>Remove only the temporary pickaxe installed by the repair scene.</summary>
+        private void EndRepairSwing(Farmer who)
+        {
+            if (this.repairPickaxe is null)
+                return;
+
+            if (ReferenceEquals(who.TemporaryItem, this.repairPickaxe))
+                who.TemporaryItem = null;
+
+            who.UsingTool = false;
+            this.repairPickaxe = null;
         }
 
         /// <summary>Show one cooldown-controlled lower-left notice; never enqueue or stack.</summary>

@@ -56,10 +56,7 @@ The optional Generic Mod Config Menu integration exposes:
 - Master enable switch
 - Destination floor interval
 - Hourly fade percentage
-- Minimum permanent foothold
 - Daily-luck influence
-- Story notices
-- Depth gauge visibility
 
 ## Testing commands
 
@@ -93,7 +90,11 @@ Bug reports and focused pull requests are welcome. Please include the SMAPI log,
 
 ## Support
 
-Qi's Fading Elevator is free. If you enjoy the mod or the other open-source work from Linh's Workshop, you can support ongoing development through [GitHub Sponsors](https://github.com/sponsors/nganlinh4).
+Qi's Fading Elevator is free. If you enjoy the mod or the other open-source work from Linh's Workshop, you can support ongoing development:
+
+For Vietnamese users — you can support the developer via VietQR (bank transfer): [click here](https://img.vietqr.io/image/970418-8850273958-compact2.png?accountName=NGUYEN%20BAO%20LINH&addInfo=Ung%20ho%20QFE).
+
+For international users — GitHub Sponsors is coming soon. In the meantime, you can support the developer through [Patreon](https://www.patreon.com/cw/tteokl).
 
 ## License
 

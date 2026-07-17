@@ -12,6 +12,9 @@ namespace QisFadingElevator
         public const int Impact2 = 66;
         public const int Impact3 = 114;
 
+        /// <summary>The farmer starts each pickaxe swing just before its matching impact.</summary>
+        public const int SwingLeadTicks = 9;
+
         /// <summary>How long each impact's contact flash stays visible.</summary>
         public const int FlashTicks = 9;
 
@@ -42,6 +45,14 @@ namespace QisFadingElevator
         {
             impactStart = elapsed >= Impact3 ? Impact3 : elapsed >= Impact2 ? Impact2 : Impact1;
             return elapsed >= Impact1 && elapsed < BatteryAt;
+        }
+
+        /// <summary>Get whether a physical swing begins on this repair tick.</summary>
+        public static bool IsSwingStart(int elapsed)
+        {
+            return elapsed == Impact1 - SwingLeadTicks
+                || elapsed == Impact2 - SwingLeadTicks
+                || elapsed == Impact3 - SwingLeadTicks;
         }
     }
 }
