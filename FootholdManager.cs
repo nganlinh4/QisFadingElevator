@@ -19,6 +19,8 @@ namespace QisFadingElevator
     /// <summary>Owns the fade math and dive recording. Pure logic — no game calls, so it's testable.</summary>
     internal sealed class FootholdManager
     {
+        private const double MinimumFoothold = 0;
+
         private readonly ModConfig config;
 
         public FootholdManager(ModConfig config)
@@ -29,13 +31,13 @@ namespace QisFadingElevator
         /// <summary>The floor the elevator can currently reach.</summary>
         public int ReachableFloor(FootholdSaveData data)
         {
-            return Math.Max(this.config.MinFoothold, (int)Math.Floor(data.Foothold));
+            return Math.Max(0, (int)Math.Floor(data.Foothold));
         }
 
         /// <summary>Whether the current foothold has an hourly fade to apply.</summary>
         public bool WouldHourlyFade(FootholdSaveData data)
         {
-            return data.Foothold > this.config.MinFoothold && this.FadeRateFor(data.Foothold) > 0;
+            return data.Foothold > MinimumFoothold && this.FadeRateFor(data.Foothold) > 0;
         }
 
         /// <summary>
@@ -45,13 +47,13 @@ namespace QisFadingElevator
         /// </summary>
         public double PreviewExactFoothold(FootholdSaveData data, double dailyLuck)
         {
-            if (data.Foothold <= this.config.MinFoothold)
+            if (data.Foothold <= MinimumFoothold)
                 return data.Foothold;
 
             double rate = this.FadeRateFor(data.Foothold) / 100.0;
             double luckFactor = Math.Clamp(1.0 - dailyLuck * this.config.LuckInfluence * 2.0, 0.5, 1.5);
             double accruingBite = data.FadeMinutes / 60.0 * (data.Foothold * rate * luckFactor);
-            return Math.Max(this.config.MinFoothold, data.Foothold - data.HourlyFadeRemainder - accruingBite);
+            return Math.Max(MinimumFoothold, data.Foothold - data.HourlyFadeRemainder - accruingBite);
         }
 
         /// <summary>Record that the player reached a Skull Cavern floor today.</summary>
@@ -78,7 +80,7 @@ namespace QisFadingElevator
         public FadeResult ApplyHourlyFade(FootholdSaveData data, double dailyLuck)
         {
             var result = this.Snapshot(data);
-            if (data.Foothold <= this.config.MinFoothold)
+            if (data.Foothold <= MinimumFoothold)
                 return result;
 
             double rate = this.FadeRateFor(data.Foothold) / 100.0;
@@ -92,9 +94,9 @@ namespace QisFadingElevator
             int wholeFloors = (int)Math.Floor(data.HourlyFadeRemainder + 0.0000001);
             if (wholeFloors > 0)
             {
-                data.Foothold = Math.Max(this.config.MinFoothold, data.Foothold - wholeFloors);
+                data.Foothold = Math.Max(MinimumFoothold, data.Foothold - wholeFloors);
                 data.HourlyFadeRemainder -= wholeFloors;
-                if (data.Foothold <= this.config.MinFoothold)
+                if (data.Foothold <= MinimumFoothold)
                     data.HourlyFadeRemainder = 0;
             }
 
@@ -108,10 +110,10 @@ namespace QisFadingElevator
         public FadeResult ApplyDamageFade(FootholdSaveData data, int floors)
         {
             var result = this.Snapshot(data);
-            if (data.Foothold <= this.config.MinFoothold || floors <= 0)
+            if (data.Foothold <= MinimumFoothold || floors <= 0)
                 return result;
 
-            data.Foothold = Math.Max(this.config.MinFoothold, data.Foothold - floors);
+            data.Foothold = Math.Max(MinimumFoothold, data.Foothold - floors);
             result.After = this.ReachableFloor(data);
             result.ExactAfter = data.Foothold;
             result.Applied = result.ExactAfter < result.ExactBefore;

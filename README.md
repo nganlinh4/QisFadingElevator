@@ -2,7 +2,7 @@
 
 ![Qi's Fading Elevator](docs/qis-fading-elevator.png)
 
-Qi's Fading Elevator adds a diegetic, repairable elevator to Skull Cavern. The shaft remembers the depths you reach, but that memory fades with time and damage, turning the elevator into a temporary foothold rather than permanent progression.
+Qi's Fading Elevator puts a broken lift beside the Skull Cavern entrance. Repair it, and the old shaft will remember the deepest floor you've reached—but the cavern slowly erases the way back.
 
 ## Screenshots
 
@@ -25,9 +25,9 @@ Qi's Fading Elevator adds a diegetic, repairable elevator to Skull Cavern. The s
 - A broken elevator appears at the Skull Cavern entrance on a fresh save.
 - Repair it with five iridium bars and one battery pack through an in-world restoration scene.
 - The repaired shaft adapts its placement and palette to the entrance and generated cavern floors.
-- Reaching a deeper floor renews the shaft's remembered foothold.
+- Reaching a deeper floor teaches the shaft the way down again.
 - The foothold fades every in-game hour, including time spent sleeping.
-- Damage in Skull Cavern causes an immediate source- and severity-based loss.
+- Damage taken inside Skull Cavern knocks the remembered floor back immediately. Monster attacks, explosions, and other health loss all count, with harder hits costing more floors.
 - A compact gauge inside Skull Cavern shows the live foothold against your personal record.
 - Elevator destinations use configurable intervals and always include the exact remembered floor.
 - Generic Mod Config Menu support is optional.
@@ -43,7 +43,7 @@ The default hourly fade is 5% of the current foothold, adjusted by daily luck. A
 ## Installation
 
 1. Install SMAPI.
-2. Download the latest release from [Nexus Mods](https://www.nexusmods.com/stardewvalley/mods/49041).
+2. Download the latest release from [Nexus Mods](https://www.nexusmods.com/stardewvalley/mods/49301).
 3. Extract the `QisFadingElevator` folder into `Stardew Valley/Mods`.
 4. Start the game through SMAPI.
 

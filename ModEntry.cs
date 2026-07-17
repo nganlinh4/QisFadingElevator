@@ -228,11 +228,9 @@ namespace QisFadingElevator
             if (!this.Config.Enabled || !Context.IsWorldReady || Game1.eventUp)
                 return;
 
-            if (this.Config.ShowToasts)
-                this.StoryNotice.Draw(e.SpriteBatch);
+            this.StoryNotice.Draw(e.SpriteBatch);
 
-            if (this.Config.ShowDepthGauge
-                && this.Data.IsRepaired
+            if (this.Data.IsRepaired
                 && ElevatorPrototype.IsSkullCavernFloor(Game1.currentLocation))
                 this.Gauge.Draw(e.SpriteBatch);
         }
@@ -479,8 +477,7 @@ namespace QisFadingElevator
         /// <summary>Show one cooldown-controlled lower-left notice; never enqueue or stack.</summary>
         private void Toast(string key, object? tokens = null)
         {
-            if (this.Config.ShowToasts)
-                this.StoryNotice.Show(key, this.T(key, tokens));
+            this.StoryNotice.Show(key, this.T(key, tokens));
         }
 
         /// <summary>Choose a non-repeating environmental reaction while sharing one record cooldown.</summary>
@@ -494,8 +491,7 @@ namespace QisFadingElevator
                 variant++;
             this.lastRecordToastVariant = variant;
 
-            if (this.Config.ShowToasts)
-                this.StoryNotice.Show("toast.new-record", this.T($"toast.new-record.{variant + 1}", new { floor }));
+            this.StoryNotice.Show("toast.new-record", this.T($"toast.new-record.{variant + 1}", new { floor }));
         }
 
         /// <summary>Look up a translation.</summary>

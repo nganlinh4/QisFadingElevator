@@ -18,20 +18,7 @@ namespace QisFadingElevator
         /// </summary>
         public double FadePercentPerHour { get; set; } = 5.0;
 
-        /*********
-        ** Softeners
-        *********/
-        /// <summary>The foothold never fades below this floor (a permanent toehold).</summary>
-        public int MinFoothold { get; set; } = 0;
-
         /// <summary>How strongly daily luck slows (good) or speeds (bad) each hourly fade. 0 disables the luck link.</summary>
         public double LuckInfluence { get; set; } = 1.0;
-
-        /// <summary>Show rare story notices for restoration, records, and direct interaction feedback.</summary>
-        public bool ShowToasts { get; set; } = true;
-
-        /// <summary>Show the depth gauge on the HUD while near the Skull Cavern.</summary>
-        public bool ShowDepthGauge { get; set; } = true;
-
     }
 }
