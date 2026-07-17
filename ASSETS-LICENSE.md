@@ -1,10 +1,10 @@
 # Visual asset license
 
-Unless a file says otherwise, the original visual assets in `assets/` and `docs/` are copyright © 2026 Ngan Linh Nguyen and licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+Unless a file says otherwise, the original visual assets in `assets/` and `docs/` are copyright © 2026 tteokl and licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
 You may share and adapt those assets for non-commercial use if you:
 
-- credit Ngan Linh Nguyen / Linh's Workshop;
+- credit tteokl;
 - link to this repository and the license;
 - indicate whether you changed the assets; and
 - distribute adaptations under the same license.
