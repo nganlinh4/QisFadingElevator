@@ -94,7 +94,7 @@ Qi's Fading Elevator is free. If you enjoy the mod or the other open-source work
 
 For Vietnamese users — you can support the developer via VietQR (bank transfer): [click here](https://img.vietqr.io/image/970418-8850273958-compact2.png?accountName=NGUYEN%20BAO%20LINH&addInfo=Ung%20ho%20QFE).
 
-For international users — GitHub Sponsors is coming soon. In the meantime, you can support the developer through [Patreon](https://www.patreon.com/cw/tteokl).
+For international users — GitHub Sponsors is coming soon. In the meantime, you can support the developer through the [Linh's Workshop Patreon Shop](https://www.patreon.com/cw/tteokl/shop).
 
 ## License
 
