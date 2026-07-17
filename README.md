@@ -4,6 +4,22 @@
 
 Qi's Fading Elevator adds a diegetic, repairable elevator to Skull Cavern. The shaft remembers the depths you reach, but that memory fades with time and damage, turning the elevator into a temporary foothold rather than permanent progression.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/01-broken-elevator-dialogue.png" alt="Discovering the broken elevator"><br><sub>Discover the dead lift and what it needs.</sub></td>
+    <td><img src="docs/screenshots/02-repair-choice.png" alt="Choosing whether to repair the elevator"><br><sub>Restore the shaft with five iridium bars and a battery pack.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/03-repair-complete.png" alt="The repaired elevator awakens"><br><sub>Violet light returns to the old rails.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/04-desert-floor-gauge.png" alt="Elevator and depth gauge on a desert-themed Skull Cavern floor"><br><sub>Adaptive placement and palette on a desert-themed floor.</sub></td>
+    <td><img src="docs/screenshots/05-cavern-floor-gauge.png" alt="Elevator and depth gauge on another Skull Cavern floor"><br><sub>The elevator and live gauge on another generated floor.</sub></td>
+  </tr>
+</table>
+
 ## Features
 
 - A broken elevator appears at the Skull Cavern entrance on a fresh save.
