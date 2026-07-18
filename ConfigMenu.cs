@@ -11,14 +11,44 @@ namespace QisFadingElevator
 
             gmcm.Register(mod.ModManifest, mod.ResetConfig, mod.SaveConfig);
 
-            gmcm.AddBoolOption(mod.ModManifest, () => mod.Config.Enabled, v => mod.Config.Enabled = v, () => "Wake the old shaft");
+            gmcm.AddBoolOption(
+                mod.ModManifest,
+                () => mod.Config.Enabled,
+                v => mod.Config.Enabled = v,
+                () => mod.T("config.enabled.name"),
+                () => mod.T("config.enabled.desc"));
 
-            gmcm.AddSectionTitle(mod.ModManifest, () => "The Old Shaft");
-            gmcm.AddNumberOption(mod.ModManifest, () => mod.Config.FloorInterval, v => mod.Config.FloorInterval = v, () => "Etched stopping marks", () => "The space between the floors carved into its panel. The deepest memory always remains.", 1, 25);
+            gmcm.AddSectionTitle(mod.ModManifest, () => mod.T("config.stops.title"));
+            gmcm.AddNumberOption(
+                mod.ModManifest,
+                () => mod.Config.FloorInterval,
+                v => mod.Config.FloorInterval = v,
+                () => mod.T("config.floor-interval.name"),
+                () => mod.T("config.floor-interval.desc"),
+                1,
+                25);
 
-            gmcm.AddSectionTitle(mod.ModManifest, () => "The Cavern's Hunger");
-            gmcm.AddNumberOption(mod.ModManifest, () => (float)mod.Config.FadePercentPerHour, v => mod.Config.FadePercentPerHour = v, () => "The cavern's hunger", () => "How much of the remembered path the stone reclaims each hour, including sleep.", 0f, 5f, 0.05f);
-            gmcm.AddNumberOption(mod.ModManifest, () => (float)mod.Config.LuckInfluence, v => mod.Config.LuckInfluence = v, () => "Fortune's mercy", () => "How strongly fortune calms—or provokes—the cavern. At zero, fortune is silent.", 0f, 5f, 0.25f);
+            gmcm.AddSectionTitle(mod.ModManifest, () => mod.T("config.fading.title"));
+            gmcm.AddNumberOption(
+                mod.ModManifest,
+                () => (float)mod.Config.FadePercentPerHour,
+                v => mod.Config.FadePercentPerHour = v,
+                () => mod.T("config.fade-per-hour.name"),
+                () => mod.T("config.fade-per-hour.desc"),
+                0f,
+                5f,
+                0.05f,
+                value => $"{value:0.##}%");
+            gmcm.AddNumberOption(
+                mod.ModManifest,
+                () => (float)mod.Config.LuckInfluence,
+                v => mod.Config.LuckInfluence = v,
+                () => mod.T("config.luck-influence.name"),
+                () => mod.T("config.luck-influence.desc"),
+                0f,
+                5f,
+                0.25f,
+                value => $"{value:0.##}×");
         }
     }
 }
