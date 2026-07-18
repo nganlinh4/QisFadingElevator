@@ -13,12 +13,12 @@ namespace QisFadingElevator
         public int FloorInterval { get; set; } = 5;
 
         /// <summary>
-        /// Hourly fade as a percent of the current foothold. Five percent means floor 10 loses one
-        /// floor in two neutral-luck hours, while floor 100 loses one in twelve minutes.
+        /// Continuous fade per in-game hour as a percent of the current foothold. Five percent means
+        /// floor 10 loses one floor in roughly two neutral-luck hours, while floor 100 loses five per hour.
         /// </summary>
         public double FadePercentPerHour { get; set; } = 5.0;
 
-        /// <summary>How strongly daily luck slows (good) or speeds (bad) each hourly fade. 0 disables the luck link.</summary>
+        /// <summary>How strongly daily luck slows (good) or speeds (bad) the continuous fade. 0 disables the luck link.</summary>
         public double LuckInfluence { get; set; } = 1.0;
     }
 }

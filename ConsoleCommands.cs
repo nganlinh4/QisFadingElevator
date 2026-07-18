@@ -17,8 +17,8 @@ namespace QisFadingElevator
         public void Register(IModHelper helper)
         {
             helper.ConsoleCommands.Add("qfe_foothold", "Set your Skull Cavern foothold (and record) to a floor, for testing. Usage: qfe_foothold <floor>", this.CmdSetFoothold);
-            helper.ConsoleCommands.Add("qfe_status", "Show your current foothold, record, repair state, and fade clock.", this.CmdStatus);
-            helper.ConsoleCommands.Add("qfe_decay", "Apply hourly fading immediately for testing. Usage: qfe_decay [hours]", this.CmdDecay);
+            helper.ConsoleCommands.Add("qfe_status", "Show your current exact foothold, reachable floor, record, and repair state.", this.CmdStatus);
+            helper.ConsoleCommands.Add("qfe_decay", "Simulate elapsed fading immediately for testing. Usage: qfe_decay [hours]", this.CmdDecay);
             helper.ConsoleCommands.Add("qfe_damage", "Test a hit. Usage: qfe_damage [health lost] [monster|blast|other]", this.CmdDamage);
             helper.ConsoleCommands.Add("qfe_repair", "Set the shaft repair state for testing. Usage: qfe_repair <on|off>", this.CmdRepair);
         }
@@ -57,7 +57,7 @@ namespace QisFadingElevator
             }
 
             this.mod.ApplyHourlyFade(hours);
-            this.mod.Monitor.Log($"Applied {hours} hourly fade pulse(s). Foothold is now {this.mod.Manager.ReachableFloor(this.mod.Data)} ({this.mod.Data.Foothold:0.00} exact).", LogLevel.Info);
+            this.mod.Monitor.Log($"Simulated {hours} hour(s) of continuous fade. Foothold is now {this.mod.Manager.ReachableFloor(this.mod.Data)} ({this.mod.Data.Foothold:0.00} exact).", LogLevel.Info);
         }
 
         /// <summary>Test the variable hit curve without taking actual damage.</summary>
@@ -107,7 +107,7 @@ namespace QisFadingElevator
                 return;
 
             this.mod.Monitor.Log(
-                $"Repaired: {this.mod.Data.IsRepaired} | Foothold: {this.mod.Manager.ReachableFloor(this.mod.Data)} ({this.mod.Data.Foothold:0.00} exact) | Record: {this.mod.Data.DeepestFloor} | Hour clock: {this.mod.Data.FadeMinutes}/60 min | Fade debt: {this.mod.Data.HourlyFadeRemainder:0.000} | HasSkullKey: {Game1.player.hasSkullKey}",
+                $"Repaired: {this.mod.Data.IsRepaired} | Reachable: {this.mod.Manager.ReachableFloor(this.mod.Data)} | Exact: {this.mod.Data.Foothold:0.000} | Record: {this.mod.Data.DeepestFloor} | HasSkullKey: {Game1.player.hasSkullKey}",
                 LogLevel.Info);
         }
 

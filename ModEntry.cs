@@ -32,7 +32,7 @@ namespace QisFadingElevator
         /// <summary>Save-data key.</summary>
         private const string SaveKey = "foothold";
 
-        private const int CurrentDataVersion = 1;
+        private const int CurrentDataVersion = 2;
         private const string IridiumBarItemId = "(O)337";
         private const string BatteryPackItemId = "(O)787";
         private const int RepairIridiumBars = 5;
@@ -76,7 +76,6 @@ namespace QisFadingElevator
             helper.Events.GameLoop.Saving += this.OnSaving;
             helper.Events.GameLoop.DayEnding += this.OnDayEnding;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
-            helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.Player.Warped += this.OnWarped;
             helper.Events.Input.ButtonPressed += this.OnButtonPressed;
@@ -112,7 +111,7 @@ namespace QisFadingElevator
             double exact = Context.IsWorldReady
                 ? this.Manager.PreviewExactFoothold(this.Data, Game1.player.DailyLuck)
                 : this.Data.Foothold;
-            this.Gauge.SetValues(exact, this.Data.Foothold, this.Data.DeepestFloor);
+            this.Gauge.SetValues(exact, this.Manager.ReachableFloor(this.Data), this.Data.DeepestFloor);
         }
 
         /// <summary>Console-command hook: force the repair state and repaint the fixture.</summary>
@@ -147,16 +146,23 @@ namespace QisFadingElevator
 
         private static void MigrateSaveData(FootholdSaveData data)
         {
-            if (data.DataVersion < CurrentDataVersion)
+            if (data.DataVersion < 1)
             {
                 // Players who already built a foothold before this system existed keep their working lift.
                 data.IsRepaired = data.DeepestFloor > 0 || data.Foothold > 0;
-                data.DataVersion = CurrentDataVersion;
             }
 
-            data.FadeMinutes = Math.Clamp(data.FadeMinutes, 0, 59);
-            data.HourlyFadeRemainder = Math.Max(0, data.HourlyFadeRemainder);
+            if (data.DataVersion < 2)
+            {
+                // Preserve fractional loss already earned by the old hourly model, then retire its
+                // separate clock/debt fields. From v2 onward Foothold itself is the exact live value.
+                data.Foothold = Math.Max(0, data.Foothold - Math.Max(0, data.HourlyFadeRemainder));
+                data.FadeMinutes = 0;
+                data.HourlyFadeRemainder = 0;
+            }
+
             data.PendingSleepMinutes = Math.Clamp(data.PendingSleepMinutes, 0, 1440);
+            data.DataVersion = CurrentDataVersion;
         }
 
         /// <summary>Persist the foothold state into the save.</summary>
@@ -181,19 +187,6 @@ namespace QisFadingElevator
             this.damageWatcher.Reset();
         }
 
-        /// <summary>Accumulate active world-clock minutes and fade once for every complete in-game hour.</summary>
-        private void OnTimeChanged(object? sender, TimeChangedEventArgs e)
-        {
-            if (!this.Config.Enabled || !this.Data.IsRepaired || !Context.IsWorldReady || !Context.IsMainPlayer)
-                return;
-
-            int elapsed = ElapsedClockMinutes(e.OldTime, e.NewTime);
-            if (elapsed <= 0)
-                return;
-
-            this.AccumulateFadeMinutes(elapsed);
-        }
-
         /// <summary>Animate the gauge and keep it in sync with the current foothold.</summary>
         private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
         {
@@ -203,6 +196,7 @@ namespace QisFadingElevator
             this.damageWatcher.Observe();
             this.StoryNotice.Update();
             this.UpdateRepairAnimation();
+            this.ApplyRealtimeFade();
             this.SyncGauge();
             this.Gauge.Update();
             if (this.Config.Enabled)
@@ -289,26 +283,37 @@ namespace QisFadingElevator
             this.TrySummonElevator();
         }
 
-        /// <summary>Apply the requested number of hourly fade pulses and aggregate their HUD feedback.</summary>
+        /// <summary>Apply test-only elapsed hours through the same continuous formula used in play.</summary>
         internal void ApplyHourlyFade(int hours)
         {
-            int lostFloors = 0;
-            bool applied = false;
-            for (int i = 0; i < hours; i++)
-            {
-                if (!this.Manager.WouldHourlyFade(this.Data))
-                    break;
-
-                FadeResult fade = this.Manager.ApplyHourlyFade(this.Data, Game1.player.DailyLuck);
-                applied |= fade.Applied;
-                lostFloors += fade.LostFloors;
-            }
-
-            if (!applied)
+            FadeResult fade = this.Manager.ApplyTimeFade(this.Data, Game1.player.DailyLuck, hours * 60.0);
+            if (!fade.Applied)
                 return;
 
+            this.Gauge.PulseDecay(fade.LostFloors, fromDamage: false);
             this.SyncGauge();
-            this.Gauge.PulseDecay(lostFloors, fromDamage: false);
+        }
+
+        /// <summary>
+        /// Erode the real elevator destination frame by frame while Stardew's clock is advancing.
+        /// Using the game's own millisecond-per-minute value keeps time-speed mods and pauses honest.
+        /// </summary>
+        private void ApplyRealtimeFade()
+        {
+            if (!this.Config.Enabled
+                || !this.Data.IsRepaired
+                || !Context.IsMainPlayer
+                || !Game1.shouldTimePass()
+                || Game1.realMilliSecondsPerGameMinute <= 0)
+            {
+                return;
+            }
+
+            double elapsedMilliseconds = Game1.currentGameTime?.ElapsedGameTime.TotalMilliseconds ?? 0;
+            double elapsedMinutes = elapsedMilliseconds / Game1.realMilliSecondsPerGameMinute;
+            FadeResult fade = this.Manager.ApplyTimeFade(this.Data, Game1.player.DailyLuck, elapsedMinutes);
+            if (fade.Changed)
+                this.Gauge.PulseDecay(fade.LostFloors, fromDamage: false);
         }
 
         /// <summary>Apply a source/severity-scaled foothold loss for one observed Skull Cavern hit.</summary>
@@ -318,20 +323,9 @@ namespace QisFadingElevator
             if (!fade.Applied)
                 return fade;
 
-            this.SyncGauge();
             this.Gauge.PulseDecay(fade.LostFloors, fromDamage: true);
+            this.SyncGauge();
             return fade;
-        }
-
-        /// <summary>Convert Stardew's HHMM clock values into elapsed playable minutes, ignoring day resets.</summary>
-        private static int ElapsedClockMinutes(int oldTime, int newTime)
-        {
-            if (newTime <= oldTime)
-                return 0;
-
-            int oldMinutes = oldTime / 100 * 60 + oldTime % 100;
-            int newMinutes = newTime / 100 * 60 + newTime % 100;
-            return Math.Max(0, newMinutes - oldMinutes);
         }
 
         /// <summary>Get in-game minutes from the actual bedtime until the next 6:00 AM.</summary>
@@ -346,26 +340,17 @@ namespace QisFadingElevator
             return Math.Clamp(1440 - elapsedSinceSix, 0, 1440);
         }
 
-        /// <summary>Add waking or sleeping minutes to the same persistent hourly fade clock.</summary>
-        private void AccumulateFadeMinutes(int minutes)
-        {
-            if (minutes <= 0)
-                return;
-
-            this.Data.FadeMinutes += minutes;
-            int elapsedHours = this.Data.FadeMinutes / 60;
-            this.Data.FadeMinutes %= 60;
-            if (elapsedHours > 0)
-                this.ApplyHourlyFade(elapsedHours);
-        }
-
         /// <summary>Consume sleeping time exactly once after a day transition.</summary>
         private void ApplyPendingSleepFade()
         {
             int minutes = this.Data.PendingSleepMinutes;
             this.Data.PendingSleepMinutes = 0;
             if (this.Config.Enabled && this.Data.IsRepaired && Context.IsMainPlayer)
-                this.AccumulateFadeMinutes(minutes);
+            {
+                FadeResult fade = this.Manager.ApplyTimeFade(this.Data, Game1.player.DailyLuck, minutes);
+                if (fade.Changed)
+                    this.Gauge.PulseDecay(fade.LostFloors, fromDamage: false);
+            }
         }
 
         /// <summary>Validate the player's situation and open the elevator menu.</summary>

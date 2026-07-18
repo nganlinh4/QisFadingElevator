@@ -15,16 +15,10 @@ namespace QisFadingElevator
         /// <summary>The current foothold the elevator can reach. Kept fractional internally for smooth fade.</summary>
         public double Foothold { get; set; }
 
-        /// <summary>
-        /// Playable in-game minutes carried toward the next hourly fade. This persists so saving or
-        /// returning to the title can't reset the clock.
-        /// </summary>
+        /// <summary>Legacy pre-v2 hourly clock. Kept only so old saves migrate cleanly.</summary>
         public int FadeMinutes { get; set; }
 
-        /// <summary>
-        /// Fractional hourly loss carried until it becomes a whole floor. Keeping this separate prevents
-        /// an infinitesimal percentage from making an integer foothold appear to lose a full floor early.
-        /// </summary>
+        /// <summary>Legacy pre-v2 fractional debt. Folded into Foothold during migration.</summary>
         public double HourlyFadeRemainder { get; set; }
 
         /// <summary>Minutes from the last bedtime until 6:00 AM, waiting to be faded next morning.</summary>

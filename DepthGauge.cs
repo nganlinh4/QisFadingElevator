@@ -23,6 +23,7 @@ namespace QisFadingElevator
         private const int Scale = 3;
         private const int SegmentCount = 24;
         private const int EmberCount = 3;
+        private const int DecayStepTicks = 6;
 
         private readonly Texture2D sprites;
         private float displayed;
@@ -35,6 +36,10 @@ namespace QisFadingElevator
         private int displayedLoss;
         private bool damageEffect;
         private bool initialized;
+        private bool steppingDecay;
+        private int decayStepTimer;
+        private int pendingFoothold;
+        private double pendingExact;
 
         public DepthGauge(Texture2D sprites)
         {
@@ -49,16 +54,37 @@ namespace QisFadingElevator
         /// fractional fade accruing in realtime); the number shows the whole floors the mechanics
         /// still honor, so it only moves when the rounded floor is truly collected.
         /// </summary>
-        public void SetValues(double exactFoothold, double mechanicalFoothold, int record)
+        public void SetValues(double exactFoothold, int reachableFoothold, int record)
         {
-            this.target = Math.Max(0, exactFoothold);
-            this.foothold = Math.Max(0, (int)Math.Floor(Math.Max(0, mechanicalFoothold)));
+            double nextExact = Math.Max(0, exactFoothold);
+            int nextFoothold = Math.Max(0, reachableFoothold);
             this.record = Math.Max(0, record);
             if (!this.initialized)
             {
-                this.displayed = (float)this.target;
+                this.target = nextExact;
+                this.foothold = nextFoothold;
+                this.pendingExact = nextExact;
+                this.pendingFoothold = nextFoothold;
+                this.displayed = (float)nextExact;
                 this.initialized = true;
+                return;
             }
+
+            // Mechanics settle immediately, but a decay already announced by PulseDecay is allowed
+            // to count through every lost floor. Reaching deeper ground cancels that old countdown:
+            // renewal should feel instant and triumphant rather than look like reverse decay.
+            if (this.steppingDecay && nextFoothold <= this.foothold)
+            {
+                this.pendingExact = nextExact;
+                this.pendingFoothold = nextFoothold;
+                return;
+            }
+
+            this.steppingDecay = false;
+            this.target = nextExact;
+            this.foothold = nextFoothold;
+            this.pendingExact = nextExact;
+            this.pendingFoothold = nextFoothold;
         }
 
         /// <summary>Flash the gauge (called on a fade or a new record).</summary>
@@ -75,13 +101,42 @@ namespace QisFadingElevator
         {
             this.flash = 1f;
             this.decayEffect = 1f;
-            this.displayedLoss = Math.Max(0, floorsLost);
+            this.displayedLoss = 0;
             this.damageEffect = fromDamage;
+            if (floorsLost > 0 && this.initialized)
+            {
+                this.steppingDecay = true;
+                this.decayStepTimer = 0;
+            }
         }
 
         /// <summary>Advance the animation one tick.</summary>
         public void Update()
         {
+            if (this.steppingDecay)
+            {
+                if (this.foothold <= this.pendingFoothold)
+                {
+                    this.steppingDecay = false;
+                    this.foothold = this.pendingFoothold;
+                    this.target = this.pendingExact;
+                }
+                else if (this.decayStepTimer-- <= 0)
+                {
+                    this.foothold--;
+                    this.target = this.foothold > this.pendingFoothold
+                        ? this.foothold
+                        : this.pendingExact;
+                    this.decayStepTimer = DecayStepTicks;
+
+                    // Each floor gets its own visible beat: number, clamp recoil, color flash, and
+                    // a single ember loss instead of one aggregate jump.
+                    this.flash = 1f;
+                    this.decayEffect = 1f;
+                    this.displayedLoss = 1;
+                }
+            }
+
             this.displayed += ((float)this.target - this.displayed) * 0.14f;
             if (Math.Abs(this.displayed - this.target) < 0.025f)
                 this.displayed = (float)this.target;

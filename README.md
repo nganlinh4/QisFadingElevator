@@ -26,13 +26,13 @@ Qi's Fading Elevator puts a broken lift beside the Skull Cavern entrance. Repair
 - Repair it with five iridium bars and one battery pack through an in-world restoration scene.
 - The repaired shaft adapts its placement and palette to the entrance and generated cavern floors.
 - Reaching a deeper floor teaches the shaft the way down again.
-- The foothold fades every in-game hour, including time spent sleeping.
+- The foothold erodes continuously with passing in-game time, including time spent sleeping.
 - Damage taken inside Skull Cavern knocks the remembered floor back immediately. Monster attacks, explosions, and other health loss all count, with harder hits costing more floors.
 - A compact gauge inside Skull Cavern shows the live foothold against your personal record.
 - Elevator destinations use configurable intervals and always include the exact remembered floor.
 - Generic Mod Config Menu support is optional.
 
-The default hourly fade is 5% of the current foothold, adjusted by daily luck. At neutral luck, floor 10 loses one floor in roughly two hours, while floor 100 loses about five floors per hour.
+The default fade is 5% of the current foothold per in-game hour, applied continuously and adjusted by daily luck. At neutral luck, floor 10 loses one floor in roughly two hours, while floor 100 loses about five floors over an hour.
 
 ## Requirements
 

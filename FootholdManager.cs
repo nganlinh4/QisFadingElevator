@@ -31,10 +31,12 @@ namespace QisFadingElevator
         /// <summary>The floor the elevator can currently reach.</summary>
         public int ReachableFloor(FootholdSaveData data)
         {
-            return Math.Max(0, (int)Math.Floor(data.Foothold));
+            return data.Foothold <= MinimumFoothold
+                ? 0
+                : Math.Max(0, (int)Math.Ceiling(data.Foothold - 0.0000001));
         }
 
-        /// <summary>Whether the current foothold has an hourly fade to apply.</summary>
+        /// <summary>Whether the current foothold can fade as game time passes.</summary>
         public bool WouldHourlyFade(FootholdSaveData data)
         {
             return data.Foothold > MinimumFoothold && this.FadeRateFor(data.Foothold) > 0;
@@ -47,13 +49,7 @@ namespace QisFadingElevator
         /// </summary>
         public double PreviewExactFoothold(FootholdSaveData data, double dailyLuck)
         {
-            if (data.Foothold <= MinimumFoothold)
-                return data.Foothold;
-
-            double rate = this.FadeRateFor(data.Foothold) / 100.0;
-            double luckFactor = Math.Clamp(1.0 - dailyLuck * this.config.LuckInfluence * 2.0, 0.5, 1.5);
-            double accruingBite = data.FadeMinutes / 60.0 * (data.Foothold * rate * luckFactor);
-            return Math.Max(MinimumFoothold, data.Foothold - data.HourlyFadeRemainder - accruingBite);
+            return Math.Max(MinimumFoothold, data.Foothold);
         }
 
         /// <summary>Record that the player reached a Skull Cavern floor today.</summary>
@@ -66,43 +62,56 @@ namespace QisFadingElevator
 
             // Reaching a floor renews the foothold up to that depth. A renewed memory starts
             // whole: physically re-reaching depth forgives the sub-floor debt already chewed
-            // from the old one. The hourly fade cadence itself never resets.
+            // from the old one. The live fade clock itself never resets.
             if (floor > data.Foothold)
-            {
                 data.Foothold = floor;
-                data.HourlyFadeRemainder = 0;
-            }
 
             return isRecord;
         }
 
-        /// <summary>Apply one playable in-game hour of fade, even while the player is actively caving.</summary>
-        public FadeResult ApplyHourlyFade(FootholdSaveData data, double dailyLuck)
+        /// <summary>
+        /// Continuously erode the exact foothold for elapsed playable game time. Exponential
+        /// retention makes the configured percentage frame-rate independent and still means that
+        /// exactly five percent of the then-current memory is gone after one neutral-luck hour.
+        /// Below floor one, continue at floor one's absolute rate so the last foothold can truly
+        /// fade to zero instead of approaching it forever.
+        /// </summary>
+        public FadeResult ApplyTimeFade(FootholdSaveData data, double dailyLuck, double elapsedMinutes)
         {
             var result = this.Snapshot(data);
-            if (data.Foothold <= MinimumFoothold)
+            if (data.Foothold <= MinimumFoothold || elapsedMinutes <= 0)
                 return result;
 
             double rate = this.FadeRateFor(data.Foothold) / 100.0;
             double luckFactor = Math.Clamp(1.0 - dailyLuck * this.config.LuckInfluence * 2.0, 0.5, 1.5);
-            double faded = data.Foothold * rate * luckFactor;
-
-            if (faded <= 0)
+            double adjustedRate = Math.Clamp(rate * luckFactor, 0.0, 0.999999);
+            if (adjustedRate <= 0)
                 return result;
 
-            data.HourlyFadeRemainder += faded;
-            int wholeFloors = (int)Math.Floor(data.HourlyFadeRemainder + 0.0000001);
-            if (wholeFloors > 0)
+            double elapsedHours = elapsedMinutes / 60.0;
+            if (data.Foothold <= 1.0)
             {
-                data.Foothold = Math.Max(MinimumFoothold, data.Foothold - wholeFloors);
-                data.HourlyFadeRemainder -= wholeFloors;
-                if (data.Foothold <= MinimumFoothold)
-                    data.HourlyFadeRemainder = 0;
+                data.Foothold = Math.Max(MinimumFoothold, data.Foothold - adjustedRate * elapsedHours);
+            }
+            else
+            {
+                double retained = Math.Pow(1.0 - adjustedRate, elapsedHours);
+                double exponentiallyFaded = data.Foothold * retained;
+                if (exponentiallyFaded >= 1.0)
+                {
+                    data.Foothold = exponentiallyFaded;
+                }
+                else
+                {
+                    double hoursToFloorOne = Math.Log(1.0 / data.Foothold) / Math.Log(1.0 - adjustedRate);
+                    double hoursBelowOne = Math.Max(0, elapsedHours - hoursToFloorOne);
+                    data.Foothold = Math.Max(MinimumFoothold, 1.0 - adjustedRate * hoursBelowOne);
+                }
             }
 
             result.After = this.ReachableFloor(data);
             result.ExactAfter = data.Foothold;
-            result.Applied = true;
+            result.Applied = result.ExactAfter < result.ExactBefore;
             return result;
         }
 
