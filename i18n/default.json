@@ -9,5 +9,15 @@
   "repair.question": "A hollow socket waits beneath the rust. Set five iridium bars around a battery pack?",
   "repair.restore": "Restore it",
   "repair.leave": "Leave it",
-  "toast.repair-complete": "Violet light takes the old rails. The shaft remembers how to move."
+  "toast.repair-complete": "Violet light takes the old rails. The shaft remembers how to move.",
+  "config.enabled.name": "Enable elevator",
+  "config.enabled.desc": "Enable or disable Qi's Fading Elevator.",
+  "config.stops.title": "Elevator stops",
+  "config.floor-interval.name": "Stop interval",
+  "config.floor-interval.desc": "How many floors apart the regular elevator stops are. Your deepest remembered floor is always available.",
+  "config.fading.title": "Remembered floor",
+  "config.fade-per-hour.name": "Fade per hour",
+  "config.fade-per-hour.desc": "Percentage of the current remembered floor lost per in-game hour. Time spent sleeping also counts.",
+  "config.luck-influence.name": "Luck effect",
+  "config.luck-influence.desc": "How strongly daily luck affects fading. Good luck slows it, while bad luck speeds it up. Set this to 0 to ignore luck."
 }

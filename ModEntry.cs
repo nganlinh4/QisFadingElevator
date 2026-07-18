@@ -532,7 +532,7 @@ namespace QisFadingElevator
         }
 
         /// <summary>Look up a translation.</summary>
-        private string T(string key, object? tokens = null)
+        internal string T(string key, object? tokens = null)
         {
             return tokens is null
                 ? this.Helper.Translation.Get(key)

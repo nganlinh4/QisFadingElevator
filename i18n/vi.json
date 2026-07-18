@@ -1,0 +1,23 @@
+{
+  "toast.new-record.1": "Tầng {{floor}}... sâu nhất từ trước đến giờ. Đường ray cũ đã ghi nhớ.",
+  "toast.new-record.2": "Ở tầng {{floor}}, ánh tím chạy dọc đường ray. Một độ sâu mới đã được ghi nhớ.",
+  "toast.new-record.3": "Kim đo dừng ở tầng {{floor}}. Ở đâu đó phía trên, thang máy cũ khẽ đáp lời.",
+  "toast.no-skull-key": "Không có Chìa khóa đầu lâu thì không thể đi xuống. Hang đầu lâu vẫn khóa chặt.",
+  "toast.no-foothold": "Thang máy chưa ghi nhớ tầng nào.",
+  "toast.memory-spent": "Dấu cũ vẫn còn, nhưng thang máy đã quên hết đường xuống.",
+  "repair.inspect": "Thang máy đã hỏng. Năm Thỏi Iridium có thể gia cố khung... còn ổ cắm trống này vừa khít với một Cục Pin.",
+  "repair.question": "Ổ cắm rỗng nằm dưới lớp gỉ. Dùng năm Thỏi Iridium và một Cục Pin để sửa thang máy?",
+  "repair.restore": "Sửa thang máy",
+  "repair.leave": "Để sau",
+  "toast.repair-complete": "Ánh tím chạy dọc đường ray cũ. Thang máy đã hoạt động trở lại.",
+  "config.enabled.name": "Bật thang máy",
+  "config.enabled.desc": "Bật hoặc tắt Qi's Fading Elevator.",
+  "config.stops.title": "Điểm dừng thang máy",
+  "config.floor-interval.name": "Khoảng cách điểm dừng",
+  "config.floor-interval.desc": "Số tầng giữa mỗi điểm dừng thông thường. Tầng sâu nhất mà thang máy còn nhớ luôn có thể được chọn.",
+  "config.fading.title": "Tầng đã lưu",
+  "config.fade-per-hour.name": "Tỷ lệ giảm mỗi giờ",
+  "config.fade-per-hour.desc": "Phần trăm của tầng đang được ghi nhớ bị mất sau mỗi giờ trong game. Thời gian ngủ cũng được tính.",
+  "config.luck-influence.name": "Ảnh hưởng của may mắn",
+  "config.luck-influence.desc": "Mức độ may mắn hằng ngày ảnh hưởng đến tốc độ giảm. May mắn tốt làm giảm chậm hơn, may mắn xấu làm giảm nhanh hơn. Đặt 0 để bỏ qua may mắn."
+}

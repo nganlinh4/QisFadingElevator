@@ -49,14 +49,19 @@ The default fade is 5% of the current foothold per in-game hour, applied continu
 
 Once you have the Skull Key, visit the Skull Cavern entrance and inspect the broken shaft from nearby.
 
+## Languages
+
+- English
+- Vietnamese (Tiếng Việt)
+
 ## Configuration
 
 The optional Generic Mod Config Menu integration exposes:
 
-- Master enable switch
-- Destination floor interval
-- Hourly fade percentage
-- Daily-luck influence
+- Enable elevator
+- Stop interval
+- Fade per hour
+- Luck effect
 
 ## Testing commands
 
