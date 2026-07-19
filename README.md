@@ -4,6 +4,13 @@
 
 Qi's Fading Elevator puts a broken lift beside the Skull Cavern entrance. Repair it, and the old shaft will remember the deepest floor you've reached—but the cavern slowly erases the way back.
 
+## Video showcases
+
+| English | Tiếng Việt |
+| --- | --- |
+| [![Watch the English showcase](https://img.youtube.com/vi/_5TzOgtpDig/hqdefault.jpg)](https://youtu.be/_5TzOgtpDig) | [![Xem video giới thiệu tiếng Việt](https://img.youtube.com/vi/ph6AU8yStr8/hqdefault.jpg)](https://youtu.be/ph6AU8yStr8) |
+| [Watch the English showcase](https://youtu.be/_5TzOgtpDig) | [Xem video giới thiệu tiếng Việt](https://youtu.be/ph6AU8yStr8) |
+
 ## Screenshots
 
 <table>
